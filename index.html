@@ -1,0 +1,2372 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>財務報表分析儀表板 V2.0</title>
+  <meta name="description" content="互動式財務報表分析儀表板V2.0，含三大報表矩陣與50條DAX公式">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #070e1a;
+      --card: rgba(15, 28, 55, .75);
+      --bdr: rgba(99, 179, 237, .12);
+      --abdr: rgba(34, 211, 238, .35);
+      --tm: #e8f0fe;
+      --muted: #7a9bbf;
+      --dim: #4a6280;
+      --cy: #22d3ee;
+      --pu: #a78bfa;
+      --em: #34d399;
+      --ro: #fb7185;
+      --am: #fbbf24;
+      --bl: #60a5fa;
+      --sw: 250px
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif
+    }
+
+    html,
+    body {
+      height: 100%;
+      overflow: hidden
+    }
+
+    body {
+      background: var(--bg);
+      background-image: radial-gradient(ellipse 70% 60% at 15% 50%, rgba(34, 211, 238, .07), transparent), radial-gradient(ellipse 60% 80% at 85% 20%, rgba(167, 139, 250, .07), transparent);
+      color: var(--tm);
+      display: flex
+    }
+
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(99, 179, 237, .3);
+      border-radius: 4px
+    }
+
+    .sidebar {
+      width: var(--sw);
+      min-width: var(--sw);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: rgba(7, 14, 26, .92);
+      border-right: 1px solid var(--bdr);
+      overflow-y: auto;
+      z-index: 20
+    }
+
+    .sb-logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 18px 14px 14px;
+      border-bottom: 1px solid var(--bdr)
+    }
+
+    .sb-li {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--cy), var(--pu));
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0
+    }
+
+    .sb-li svg {
+      width: 16px;
+      height: 16px;
+      stroke: #fff;
+      fill: none;
+      stroke-width: 2
+    }
+
+    .sb-brand {
+      font-size: .92rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--cy), var(--pu));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent
+    }
+
+    .sb-brand small {
+      display: block;
+      font-size: .62rem;
+      font-weight: 400;
+      -webkit-text-fill-color: var(--muted);
+      background: none;
+      -webkit-background-clip: unset
+    }
+
+    .sb-lbl {
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--dim);
+      padding: 14px 14px 5px
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 9px 12px;
+      margin: 1px 7px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all .22s;
+      color: var(--muted);
+      font-size: .84rem;
+      font-weight: 500;
+      border: 1px solid transparent;
+      position: relative
+    }
+
+    .nav:hover {
+      background: rgba(34, 211, 238, .06);
+      color: var(--tm);
+      border-color: rgba(34, 211, 238, .1)
+    }
+
+    .nav.active {
+      background: linear-gradient(90deg, rgba(34, 211, 238, .12), rgba(167, 139, 250, .05));
+      color: var(--tm);
+      border-color: rgba(34, 211, 238, .2);
+      font-weight: 700
+    }
+
+    .nav.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 20%;
+      bottom: 20%;
+      width: 3px;
+      background: linear-gradient(var(--cy), var(--pu));
+      border-radius: 2px
+    }
+
+    .nav svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      flex-shrink: 0
+    }
+
+    .nbadge {
+      margin-left: auto;
+      font-size: .6rem;
+      padding: 2px 7px;
+      border-radius: 20px;
+      background: rgba(34, 211, 238, .14);
+      color: var(--cy)
+    }
+
+    .sb-foot {
+      padding: 12px 14px;
+      border-top: 1px solid var(--bdr);
+      margin-top: auto;
+      font-size: .7rem;
+      color: var(--dim);
+      line-height: 1.6
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--bdr);
+      background: rgba(7, 14, 26, .85);
+      backdrop-filter: blur(16px);
+      flex-shrink: 0;
+      gap: 14px
+    }
+
+    .tb-left {
+      display: flex;
+      align-items: center;
+      gap: 11px
+    }
+
+    .tb-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--cy), var(--pu));
+      display: flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    .tb-icon svg {
+      width: 15px;
+      height: 15px;
+      stroke: #fff;
+      fill: none;
+      stroke-width: 2
+    }
+
+    .tb-title h1 {
+      font-size: .95rem;
+      font-weight: 700
+    }
+
+    .tb-title p {
+      font-size: .7rem;
+      color: var(--muted)
+    }
+
+    .tb-acts {
+      display: flex;
+      gap: 9px;
+      flex-shrink: 0
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--bdr);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: .78rem;
+      transition: all .22s;
+      color: var(--tm);
+      background: var(--card)
+    }
+
+    .btn:hover {
+      border-color: var(--cy);
+      color: var(--cy);
+      transform: translateY(-1px)
+    }
+
+    .btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      flex-shrink: 0
+    }
+
+    .btn-p {
+      background: linear-gradient(135deg, rgba(34, 211, 238, .9), rgba(167, 139, 250, .9));
+      border: none;
+      color: #070e1a;
+      font-weight: 700
+    }
+
+    .btn-p:hover {
+      box-shadow: 0 0 18px rgba(34, 211, 238, .4);
+      transform: translateY(-2px);
+      color: #070e1a
+    }
+
+    #fileInput {
+      display: none
+    }
+
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 22px 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 0
+    }
+
+    .glass {
+      background: var(--card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--bdr);
+      border-radius: 12px;
+      transition: border-color .2s
+    }
+
+    .glass:hover {
+      border-color: rgba(99, 179, 237, .2)
+    }
+
+    .page {
+      display: none;
+      flex-direction: column;
+      gap: 18px;
+      animation: fu .3s ease-out
+    }
+
+    .page.active {
+      display: flex
+    }
+
+    @keyframes fu {
+      from {
+        opacity: 0;
+        transform: translateY(10px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    .kg {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px
+    }
+
+    .kg5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px
+    }
+
+    .kc {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      position: relative;
+      overflow: hidden;
+      transition: transform .22s, box-shadow .22s
+    }
+
+    .kc:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .3)
+    }
+
+    .kc::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      border-radius: 12px 12px 0 0
+    }
+
+    .kc.cy::after {
+      background: linear-gradient(90deg, var(--cy), #0ea5e9)
+    }
+
+    .kc.pu::after {
+      background: linear-gradient(90deg, var(--pu), #7c3aed)
+    }
+
+    .kc.em::after {
+      background: linear-gradient(90deg, var(--em), #059669)
+    }
+
+    .kc.ro::after {
+      background: linear-gradient(90deg, var(--ro), #e11d48)
+    }
+
+    .kc.am::after {
+      background: linear-gradient(90deg, var(--am), #d97706)
+    }
+
+    .kc.bl::after {
+      background: linear-gradient(90deg, var(--bl), #2563eb)
+    }
+
+    .klbl {
+      font-size: .72rem;
+      color: var(--muted);
+      font-weight: 500
+    }
+
+    .kval {
+      font-size: 1.62rem;
+      font-weight: 700;
+      letter-spacing: -.02em
+    }
+
+    .kchg {
+      font-size: .73rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px
+    }
+
+    .pos {
+      color: var(--em)
+    }
+
+    .neg {
+      color: var(--ro)
+    }
+
+    .neu {
+      color: var(--muted)
+    }
+
+    .cr {
+      display: grid;
+      gap: 14px
+    }
+
+    .cr2 {
+      grid-template-columns: 2fr 1fr
+    }
+
+    .cr11 {
+      grid-template-columns: 1fr 1fr
+    }
+
+    .cr3 {
+      grid-template-columns: 2fr 1fr 1fr
+    }
+
+    .cp {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 320px
+    }
+
+    .cp.tall {
+      min-height: 420px
+    }
+
+    .cp h3 {
+      font-size: .86rem;
+      font-weight: 700;
+      color: var(--tm)
+    }
+
+    .cw {
+      flex: 1;
+      position: relative;
+      min-height: 0
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 22px;
+      right: 22px;
+      padding: 13px 20px;
+      background: rgba(15, 28, 55, .95);
+      border-left: 4px solid var(--em);
+      border-radius: 9px;
+      backdrop-filter: blur(12px);
+      color: var(--tm);
+      font-size: .83rem;
+      font-weight: 500;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .4);
+      transform: translateX(130%);
+      transition: transform .3s cubic-bezier(.175, .885, .32, 1.275);
+      z-index: 9999
+    }
+
+    .toast.show {
+      transform: translateX(0)
+    }
+
+    .fin-tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .76rem
+    }
+
+    .fin-tbl th {
+      background: rgba(34, 211, 238, .08);
+      color: var(--cy);
+      font-weight: 700;
+      padding: 7px 10px;
+      text-align: right;
+      border-bottom: 1px solid var(--bdr);
+      white-space: nowrap
+    }
+
+    .fin-tbl th:first-child {
+      text-align: left
+    }
+
+    .fin-tbl td {
+      padding: 6px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, .04);
+      text-align: right;
+      transition: background .15s
+    }
+
+    .fin-tbl td:first-child {
+      text-align: left;
+      color: var(--muted)
+    }
+
+    .fin-tbl tr:hover td {
+      background: rgba(34, 211, 238, .04)
+    }
+
+    .fin-tbl .sub td {
+      color: var(--cy);
+      font-weight: 600;
+      background: rgba(34, 211, 238, .05)
+    }
+
+    .fin-tbl .tot td {
+      color: var(--am);
+      font-weight: 800;
+      background: rgba(251, 191, 36, .05);
+      border-top: 1px solid rgba(251, 191, 36, .25)
+    }
+
+    .fin-tbl .i1 td:first-child {
+      padding-left: 22px
+    }
+
+    .fin-tbl .i2 td:first-child {
+      padding-left: 34px
+    }
+
+    .fin-tbl .sh td {
+      background: rgba(167, 139, 250, .07);
+      color: var(--pu);
+      font-weight: 700;
+      font-size: .82rem
+    }
+
+    .dg {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 13px
+    }
+
+    .dc {
+      padding: 14px 16px;
+      border-radius: 11px;
+      border: 1px solid var(--bdr);
+      background: var(--card);
+      transition: transform .2s, border-color .2s
+    }
+
+    .dc:hover {
+      transform: translateY(-2px);
+      border-color: rgba(34, 211, 238, .28)
+    }
+
+    .dbadge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: .63rem;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 700;
+      margin-bottom: 7px
+    }
+
+    .dbs {
+      background: rgba(34, 211, 238, .14);
+      color: var(--cy)
+    }
+
+    .dis {
+      background: rgba(167, 139, 250, .14);
+      color: var(--pu)
+    }
+
+    .dcf {
+      background: rgba(52, 211, 153, .14);
+      color: var(--em)
+    }
+
+    .dge {
+      background: rgba(251, 191, 36, .14);
+      color: var(--am)
+    }
+
+    .dname {
+      font-size: .83rem;
+      font-weight: 700;
+      color: var(--tm);
+      margin-bottom: 5px
+    }
+
+    .dcode {
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: .7rem;
+      background: rgba(0, 0, 0, .4);
+      border-left: 3px solid var(--cy);
+      padding: 7px 11px;
+      border-radius: 0 5px 5px 0;
+      color: #a5d6ff;
+      line-height: 1.55;
+      word-break: break-all;
+      white-space: pre-wrap
+    }
+
+    .dcode.isc {
+      border-color: var(--pu)
+    }
+
+    .dcode.cfc {
+      border-color: var(--em)
+    }
+
+    .dcode.gec {
+      border-color: var(--am)
+    }
+
+    .ddesc {
+      font-size: .73rem;
+      color: var(--muted);
+      margin-top: 7px;
+      line-height: 1.55
+    }
+
+    .shdr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .95rem;
+      font-weight: 700;
+      margin-bottom: 4px
+    }
+
+    .shdr::before {
+      content: '';
+      width: 4px;
+      height: 16px;
+      background: linear-gradient(var(--cy), var(--pu));
+      border-radius: 2px
+    }
+  </style>
+</head>
+
+<body>
+  <aside class="sidebar">
+    <div class="sb-logo">
+      <div class="sb-li"><svg viewBox="0 0 24 24">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        </svg></div>
+      <div class="sb-brand">財務分析中心<small>V2.0 Power BI Dashboard</small></div>
+    </div>
+    <div class="sb-lbl">核心分析</div>
+    <div class="nav active" data-page="p1" data-title="財務總覽" data-sub="Financial Overview">
+      <svg viewBox="0 0 24 24">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
+      財務總覽<span class="nbadge">P1</span>
+    </div>
+    <div class="nav" data-page="p2" data-title="資產負債表" data-sub="Balance Sheet">
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      </svg>
+      資產負債表<span class="nbadge">P2</span>
+    </div>
+    <div class="nav" data-page="p3" data-title="綜合損益表" data-sub="Income Statement">
+      <svg viewBox="0 0 24 24">
+        <line x1="12" y1="1" x2="12" y2="23" />
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+      </svg>
+      綜合損益表<span class="nbadge">P3</span>
+    </div>
+    <div class="nav" data-page="p4" data-title="現金流量表" data-sub="Cash Flow Statement">
+      <svg viewBox="0 0 24 24">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      </svg>
+      現金流量表<span class="nbadge">P4</span>
+    </div>
+    <div class="sb-lbl">深度分析</div>
+    <div class="nav" data-page="p5" data-title="獲利能力分析" data-sub="Profitability Analysis">
+      <svg viewBox="0 0 24 24">
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+        <polyline points="17 6 23 6 23 12" />
+      </svg>
+      獲利能力分析<span class="nbadge">P5</span>
+    </div>
+    <div class="nav" data-page="p6" data-title="流動性與營運" data-sub="Liquidity &amp; Operations">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+      </svg>
+      流動性與營運<span class="nbadge">P6</span>
+    </div>
+    <div class="nav" data-page="p7" data-title="杜邦分析" data-sub="DuPont Analysis">
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path
+          d="M8.56 2.75c4.37 6.03 6.02 9.42 8.03 17.72m2.54-15.38c-3.72 4.35-8.94 5.66-16.88 5.85m19.5 1.9c-3.5-.93-6.63-.82-8.94 0-2.58.92-5.01 2.86-7.44 6.32" />
+      </svg>
+      杜邦分析<span class="nbadge">P7</span>
+    </div>
+    <div class="nav" data-page="p8" data-title="Z-Score 破產預警" data-sub="Altman Z-Score">
+      <svg viewBox="0 0 24 24">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+      Z-Score 預警<span class="nbadge">P8</span>
+    </div>
+    <div class="sb-lbl">報表與參考</div>
+    <div class="nav" data-page="p9" data-title="三大報表矩陣" data-sub="Financial Statements Matrix">
+      <svg viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+      </svg>
+      三大報表矩陣<span class="nbadge">P9</span>
+    </div>
+    <div class="nav" data-page="p10" data-title="DAX 公式參考" data-sub="50 DAX Formulas">
+      <svg viewBox="0 0 24 24">
+        <polyline points="16 18 22 12 16 6" />
+        <polyline points="8 6 2 12 8 18" />
+      </svg>
+      DAX 公式參考<span class="nbadge">P10</span>
+    </div>
+    <div class="sb-foot">finanscal Analysis V2.0 &copy; 2026<br>Power BI 財務報表分析儀表板</div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="tb-left">
+        <div class="tb-icon" id="tIcon"><svg viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg></div>
+        <div class="tb-title">
+          <h1 id="tTitle">財務總覽</h1>
+          <p id="tSub">Financial Overview</p>
+        </div>
+      </div>
+      <div class="tb-acts">
+        <button class="btn" onclick="downloadCSV()"><svg viewBox="0 0 24 24">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>下載範例資料</button>
+        <button class="btn" onclick="resetData()"><svg viewBox="0 0 24 24">
+            <polyline points="1 4 1 10 7 10" />
+            <path d="M3.51 15a9 9 0 1 0 .49-3.08" />
+          </svg>重置資料</button>
+        <button class="btn btn-p" onclick="document.getElementById('fileInput').click()"><svg viewBox="0 0 24 24">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>匯入資料 (XLSX/CSV)</button>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+      </div>
+    </header>
+    <div class="content" id="content">
+      <!-- P1: 財務總覽 -->
+      <section class="page active" id="p1">
+        <div class="kg" id="kg1"></div>
+        <div class="cr cr2">
+          <div class="glass cp">
+            <h3>📈 年度營收 vs 淨利潤趨勢</h3>
+            <div class="cw"><canvas id="c1a"></canvas></div>
+          </div>
+          <div class="glass cp">
+            <h3>🥧 利潤結構（最新月份）</h3>
+            <div class="cw"><canvas id="c1b"></canvas></div>
+          </div>
+        </div>
+        <div class="cr cr11">
+          <div class="glass cp">
+            <h3>📊 各月毛利率 vs 淨利率走勢</h3>
+            <div class="cw"><canvas id="c1c"></canvas></div>
+          </div>
+          <div class="glass cp">
+            <h3>💰 累計 YTD 營收與淨利</h3>
+            <div class="cw"><canvas id="c1d"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P2: 資產負債表 -->
+      <section class="page" id="p2">
+        <div class="kg" id="kg2"></div>
+        <div class="cr cr2">
+          <div class="glass cp tall">
+            <h3>🏛️ 資產負債結構趨勢（堆疊）</h3>
+            <div class="cw"><canvas id="c2a"></canvas></div>
+          </div>
+          <div class="glass cp tall">
+            <h3>🍩 資產成分分析（最新）</h3>
+            <div class="cw"><canvas id="c2b"></canvas></div>
+          </div>
+        </div>
+        <div class="cr cr11">
+          <div class="glass cp">
+            <h3>📐 償債能力指標趨勢</h3>
+            <div class="cw"><canvas id="c2c"></canvas></div>
+          </div>
+          <div class="glass cp">
+            <h3>⚖️ 資本結構分析（負債率 vs 權益比）</h3>
+            <div class="cw"><canvas id="c2d"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P3: 綜合損益表 -->
+      <section class="page" id="p3">
+        <div class="kg" id="kg3"></div>
+        <div class="cr cr11">
+          <div class="glass cp tall">
+            <h3>🌊 損益結構瀑布圖（最新月份）</h3>
+            <div class="cw"><canvas id="c3a"></canvas></div>
+          </div>
+          <div class="glass cp tall">
+            <h3>📉 利潤率三線趨勢（毛利/營利/淨利）</h3>
+            <div class="cw"><canvas id="c3b"></canvas></div>
+          </div>
+        </div>
+        <div class="cr cr2">
+          <div class="glass cp">
+            <h3>📅 月度收入 vs 成本對比</h3>
+            <div class="cw"><canvas id="c3c"></canvas></div>
+          </div>
+          <div class="glass cp">
+            <h3>🎯 費用佔收入比例雷達</h3>
+            <div class="cw"><canvas id="c3d"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P4: 現金流量表 -->
+      <section class="page" id="p4">
+        <div class="kg" id="kg4"></div>
+        <div class="cr cr2">
+          <div class="glass cp tall">
+            <h3>〰️ 三大活動現金流趨勢</h3>
+            <div class="cw"><canvas id="c4a"></canvas></div>
+          </div>
+          <div class="glass cp tall">
+            <h3>🌊 年度現金淨流量瀑布圖</h3>
+            <div class="cw"><canvas id="c4b"></canvas></div>
+          </div>
+        </div>
+        <div class="cr cr11">
+          <div class="glass cp">
+            <h3>🔄 現金流造血能力分析（CFO/Net Income）</h3>
+            <div class="cw"><canvas id="c4c"></canvas></div>
+          </div>
+          <div class="glass cp">
+            <h3>📊 三大活動佔比（最新年度）</h3>
+            <div class="cw"><canvas id="c4d"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P5: 獲利能力 -->
+      <section class="page" id="p5">
+        <div class="kg" id="kg5"></div>
+        <div class="cr cr2">
+          <div class="glass cp tall">
+            <h3>📈 獲利能力指標趨勢（ROE/ROA/淨利率）</h3>
+            <div class="cw"><canvas id="c5a"></canvas></div>
+          </div>
+          <div class="glass cp tall">
+            <h3>🕸️ 獲利能力雷達圖（最新期）</h3>
+            <div class="cw"><canvas id="c5b"></canvas></div>
+          </div>
+        </div>
+        <div class="cr cr3">
+          <div class="glass cp">
+            <h3>📊 EBIT 趨勢與利息保障倍數</h3>
+            <div class="cw"><canvas id="c5c"></canvas></div>
+          </div>
+          <div class="glass cp">
+            <h3>💹 資產週轉率趨勢</h3>
+            <div class="cw"><canvas id="c5d"></canvas></div>
+          </div>
+          <div class="glass cp">
+            <h3>🎯 ROE 分解（三大因子）</h3>
+            <div class="cw"><canvas id="c5e"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P6: 流動性與營運 -->
+      <section class="page" id="p6">
+        <div class="kg" id="kg6"></div>
+        <div class="cr cr11">
+          <div class="glass cp tall">
+            <h3>💧 流動/速動/現金比率趨勢</h3>
+            <div class="cw"><canvas id="c6a"></canvas></div>
+          </div>
+          <div class="glass cp tall">
+            <h3>🔄 營運資本變動趨勢</h3>
+            <div class="cw"><canvas id="c6b"></canvas></div>
+          </div>
+        </div>
+        <div class="cr cr11">
+          <div class="glass cp">
+            <h3>📦 存貨週轉天數趨勢</h3>
+            <div class="cw"><canvas id="c6c"></canvas></div>
+          </div>
+          <div class="glass cp">
+            <h3>📋 應收帳款週轉天數趨勢</h3>
+            <div class="cw"><canvas id="c6d"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- P7: 杜邦分析 -->
+      <section class="page" id="p7">
+        <div class="kg" id="kg7"></div>
+        <div class="cr cr2">
+          <div class="glass cp tall" style="min-height:500px">
+            <h3>🔬 杜邦分解樹（最新期）</h3>
+            <div id="dupont-tree"
+              style="padding:16px;flex:1;display:flex;flex-direction:column;align-items:center;gap:0">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <div id="dp-roe"
+                  style="background:rgba(34,211,238,.12);border:2px solid var(--cy);border-radius:10px;padding:14px 24px;text-align:center;min-width:140px">
+                  <div style="font-size:.72rem;color:var(--muted)">ROE（股東權益報酬率）</div>
+                  <div id="dp-roe-v" style="font-size:2rem;font-weight:800;color:var(--cy)">-</div>
+                </div>
+              </div>
+              <div style="width:2px;height:20px;background:var(--cy)"></div>
+              <div style="font-size:.8rem;color:var(--cy);margin:4px 0">＝</div>
+              <div
+                style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:8px;align-items:center;width:100%;max-width:700px">
+                <div id="dp-npm"
+                  style="background:rgba(167,139,250,.1);border:1px solid var(--pu);border-radius:9px;padding:12px;text-align:center">
+                  <div style="font-size:.68rem;color:var(--muted)">淨利率</div>
+                  <div id="dp-npm-v" style="font-size:1.4rem;font-weight:800;color:var(--pu)">-</div>
+                  <div style="font-size:.62rem;color:var(--dim)">淨利 ÷ 收入</div>
+                </div>
+                <div style="font-size:1.2rem;color:var(--am);font-weight:700">×</div>
+                <div id="dp-ato"
+                  style="background:rgba(251,191,36,.1);border:1px solid var(--am);border-radius:9px;padding:12px;text-align:center">
+                  <div style="font-size:.68rem;color:var(--muted)">資產週轉率</div>
+                  <div id="dp-ato-v" style="font-size:1.4rem;font-weight:800;color:var(--am)">-</div>
+                  <div style="font-size:.62rem;color:var(--dim)">收入 ÷ 總資產</div>
+                </div>
+                <div style="font-size:1.2rem;color:var(--am);font-weight:700">×</div>
+                <div id="dp-em"
+                  style="background:rgba(52,211,153,.1);border:1px solid var(--em);border-radius:9px;padding:12px;text-align:center">
+                  <div style="font-size:.68rem;color:var(--muted)">財務槓桿</div>
+                  <div id="dp-em-v" style="font-size:1.4rem;font-weight:800;color:var(--em)">-</div>
+                  <div style="font-size:.62rem;color:var(--dim)">總資產 ÷ 權益</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="glass cp tall">
+            <h3>📊 杜邦三因子趨勢比較</h3>
+            <div class="cw"><canvas id="c7a"></canvas></div>
+          </div>
+        </div>
+        <div class="glass cp">
+          <h3>📈 ROE 歷史趨勢與三因子驅動堆疊</h3>
+          <div class="cw"><canvas id="c7b"></canvas></div>
+        </div>
+      </section>
+
+      <!-- P8: Z-Score -->
+      <section class="page" id="p8">
+        <div class="kg" id="kg8"></div>
+        <div class="cr cr2">
+          <div class="glass cp tall" style="min-height:380px">
+            <h3>⚠️ Altman Z-Score 儀表盤（最新期）</h3>
+            <div
+              style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:16px;padding:16px">
+              <div style="position:relative;width:200px;height:200px">
+                <canvas id="c8gauge"></canvas>
+                <div
+                  style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                  <div id="zscore-val" style="font-size:2.6rem;font-weight:800;color:var(--am)">-</div>
+                  <div style="font-size:.72rem;color:var(--muted)">Z-Score</div>
+                </div>
+              </div>
+              <div id="zscore-status"
+                style="font-size:1rem;font-weight:700;padding:8px 20px;border-radius:20px;background:rgba(251,191,36,.15);color:var(--am)">
+                計算中...</div>
+              <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+                <span
+                  style="font-size:.72rem;padding:4px 12px;border-radius:20px;background:rgba(251,113,133,.15);color:var(--ro)">▼
+                  &lt;1.8 危險區</span>
+                <span
+                  style="font-size:.72rem;padding:4px 12px;border-radius:20px;background:rgba(120,120,120,.15);color:var(--muted)">⬤
+                  1.8~2.9 灰色區</span>
+                <span
+                  style="font-size:.72rem;padding:4px 12px;border-radius:20px;background:rgba(52,211,153,.15);color:var(--em)">▲
+                  &gt;2.9 安全區</span>
+              </div>
+            </div>
+          </div>
+          <div class="glass cp tall">
+            <h3>📉 Z-Score 歷史趨勢（含警戒線）</h3>
+            <div class="cw"><canvas id="c8a"></canvas></div>
+          </div>
+        </div>
+        <div class="cr cr11">
+          <div class="glass cp">
+            <h3>🧮 Z-Score 五大財務因子貢獻度</h3>
+            <div class="cw"><canvas id="c8b"></canvas></div>
+          </div>
+          <div class="glass cp" style="padding:20px">
+            <h3>📋 Z-Score 計算明細</h3>
+            <table class="fin-tbl" id="zscore-detail" style="margin-top:12px">
+              <thead>
+                <tr>
+                  <th style="text-align:left">因子</th>
+                  <th>公式</th>
+                  <th>係數</th>
+                  <th>數值</th>
+                  <th>貢獻</th>
+                </tr>
+              </thead>
+              <tbody id="zscore-tbody">
+                <tr>
+                  <td>X1 營運資本/總資產</td>
+                  <td>NWC/TA</td>
+                  <td>1.2</td>
+                  <td id="zx1">-</td>
+                  <td id="zx1c">-</td>
+                </tr>
+                <tr>
+                  <td>X2 保留盈餘/總資產</td>
+                  <td>RE/TA</td>
+                  <td>1.4</td>
+                  <td id="zx2">-</td>
+                  <td id="zx2c">-</td>
+                </tr>
+                <tr>
+                  <td>X3 EBIT/總資產</td>
+                  <td>EBIT/TA</td>
+                  <td>3.3</td>
+                  <td id="zx3">-</td>
+                  <td id="zx3c">-</td>
+                </tr>
+                <tr>
+                  <td>X4 市值/負債帳面</td>
+                  <td>EQ/TD</td>
+                  <td>0.6</td>
+                  <td id="zx4">-</td>
+                  <td id="zx4c">-</td>
+                </tr>
+                <tr>
+                  <td>X5 銷售/總資產</td>
+                  <td>Rev/TA</td>
+                  <td>1.0</td>
+                  <td id="zx5">-</td>
+                  <td id="zx5c">-</td>
+                </tr>
+                <tr class="tot">
+                  <td colspan="4">Z-Score 合計</td>
+                  <td id="ztotal" style="color:var(--am)">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- P9: 三大報表矩陣 -->
+      <section class="page" id="p9">
+        <div class="shdr">三大財務報表矩陣（月度資料）</div>
+        <div style="display:grid;grid-template-columns:1fr;gap:16px">
+          <div class="glass" style="padding:18px">
+            <div class="shdr" style="font-size:.85rem;margin-bottom:12px">📋 資產負債表 Balance Sheet</div>
+            <div style="overflow-x:auto">
+              <table class="fin-tbl" id="bs-matrix">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;min-width:180px">項目</th>
+                  </tr>
+                </thead>
+                <tbody id="bs-matrix-body">
+                  <tr class="sh">
+                    <td colspan="13">【資產】</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>流動資產合計</td>
+                  </tr>
+                  <tr class="i2">
+                    <td>現金及約當現金</td>
+                  </tr>
+                  <tr class="i2">
+                    <td>應收帳款</td>
+                  </tr>
+                  <tr class="i2">
+                    <td>存貨</td>
+                  </tr>
+                  <tr class="i1 sub">
+                    <td>非流動資產合計</td>
+                  </tr>
+                  <tr class="i2">
+                    <td>固定資產（淨值）</td>
+                  </tr>
+                  <tr class="tot">
+                    <td>資產總計</td>
+                  </tr>
+                  <tr class="sh">
+                    <td colspan="13">【負債及所有者權益】</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>流動負債合計</td>
+                  </tr>
+                  <tr class="i2">
+                    <td>短期借款</td>
+                  </tr>
+                  <tr class="i2">
+                    <td>應付帳款</td>
+                  </tr>
+                  <tr class="i1 sub">
+                    <td>非流動負債合計</td>
+                  </tr>
+                  <tr class="i2">
+                    <td>長期借款</td>
+                  </tr>
+                  <tr class="i1 sub">
+                    <td>負債合計</td>
+                  </tr>
+                  <tr class="i1 sub">
+                    <td>所有者權益合計</td>
+                  </tr>
+                  <tr class="i2">
+                    <td>保留盈餘</td>
+                  </tr>
+                  <tr class="tot">
+                    <td>負債及權益總計</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="glass" style="padding:18px">
+            <div class="shdr" style="font-size:.85rem;margin-bottom:12px">💰 綜合損益表 Income Statement</div>
+            <div style="overflow-x:auto">
+              <table class="fin-tbl" id="is-matrix">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;min-width:180px">項目</th>
+                  </tr>
+                </thead>
+                <tbody id="is-matrix-body">
+                  <tr class="sub">
+                    <td>營業收入</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>(-) 營業成本</td>
+                  </tr>
+                  <tr class="sub">
+                    <td>毛利</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>(-) 營業費用</td>
+                  </tr>
+                  <tr class="sub">
+                    <td>營業利益（EBIT）</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>(-) 利息費用</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>(-) 所得稅</td>
+                  </tr>
+                  <tr class="tot">
+                    <td>本期淨利</td>
+                  </tr>
+                  <tr class="sh">
+                    <td colspan="13">獲利能力指標</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>毛利率</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>營業利益率</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>淨利率</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="glass" style="padding:18px">
+            <div class="shdr" style="font-size:.85rem;margin-bottom:12px">🌊 現金流量表 Cash Flow Statement</div>
+            <div style="overflow-x:auto">
+              <table class="fin-tbl" id="cf-matrix">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;min-width:180px">項目</th>
+                  </tr>
+                </thead>
+                <tbody id="cf-matrix-body">
+                  <tr class="sh">
+                    <td colspan="13">【一、營業活動】</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>本期淨利</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>(+) 折舊及攤銷</td>
+                  </tr>
+                  <tr class="sub">
+                    <td>營業活動現金流量（CFO）</td>
+                  </tr>
+                  <tr class="sh">
+                    <td colspan="13">【二、投資活動】</td>
+                  </tr>
+                  <tr class="sub">
+                    <td>投資活動現金流量（CFI）</td>
+                  </tr>
+                  <tr class="sh">
+                    <td colspan="13">【三、籌資活動】</td>
+                  </tr>
+                  <tr class="sub">
+                    <td>籌資活動現金流量（CFF）</td>
+                  </tr>
+                  <tr class="tot">
+                    <td>現金淨增加（減少）額</td>
+                  </tr>
+                  <tr class="i1">
+                    <td>期初現金餘額</td>
+                  </tr>
+                  <tr class="tot">
+                    <td>期末現金餘額</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="page" id="p10">
+        <div class="shdr">50 條 DAX 核心公式完整解析</div>
+        <div class="dg">
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式01：期末資產負債表基礎金額</div>
+            <pre class="dcode">BS_Amount = SUM('F財務匯總表'[金額])</pre>
+            <div class="ddesc">⚠️ 最基礎的求和。直接使用於時間切片器下會錯誤累加期末餘額，僅作中間度量值。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式02：單位動態切換</div>
+            <pre class="dcode">BS_Unit = DIVIDE(SUM('F財務匯總表'[金額]),
+  SELECTEDVALUE('D單位表'[倍率], 1))</pre>
+            <div class="ddesc">透過「單位輔助表」實現元/萬元動態切換，SELECTEDVALUE返回切片器選中的倍率（1或10000）。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式03：資產負債表正確期末額</div>
+            <pre class="dcode">BS_EndBalance =
+LASTNONBLANKVALUE(
+  'D日期表'[日期],
+  CALCULATE([BS_Amount])
+)</pre>
+            <div class="ddesc">核心解決方案。LASTNONBLANKVALUE迭代日期列，返回最後一個非空值日期的計算結果，確保反映特定時點的期末餘額。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式04：資產負債表年初數</div>
+            <pre class="dcode">BS_YearStart =
+CALCULATE(
+  [BS_EndBalance],
+  FILTER(ALL('D日期表'),
+    'D日期表'[年份] = YEAR(MAX('D日期表'[日期]))-1
+    && MONTH('D日期表'[日期]) = 12
+  )
+)</pre>
+            <div class="ddesc">定位至上一年度12月1日（系統默認月初），獲取該時點的期末數作為本年年初數。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式05：資產增長額</div>
+            <pre class="dcode">BS_AssetGrowth =
+[BS_EndBalance] - [BS_YearStart]</pre>
+            <div class="ddesc">計算資產規模在會計期間內的絕對增減變動。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式06：資產增長率</div>
+            <pre class="dcode">BS_AssetGrowthRate =
+DIVIDE([BS_AssetGrowth], [BS_YearStart])</pre>
+            <div class="ddesc">反映資產規模的擴張速度，DIVIDE安全除法，年初餘額為零時返回BLANK。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式07：資產負債率</div>
+            <pre class="dcode">BS_DebtRatio =
+DIVIDE([BS_TotalLiab], [BS_TotalAssets])</pre>
+            <div class="ddesc">總負債÷總資產，衡量企業長期償債能力。正常範圍40%-70%，超過70%需警惕財務風險。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式08：流動比率</div>
+            <pre class="dcode">BS_CurrentRatio =
+DIVIDE([BS_CurrentAssets], [BS_CurrentLiab])</pre>
+            <div class="ddesc">流動資產對流動負債的覆蓋倍數。標準值>2，最低安全線>1。低於1表示短期償債能力嚴重不足。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式09：現金比率</div>
+            <pre class="dcode">BS_CashRatio =
+DIVIDE([BS_Cash], [BS_CurrentLiab])</pre>
+            <div class="ddesc">最嚴格的短期償債指標，僅考慮即時可動用的現金，標準值>0.2。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式10：營運資本</div>
+            <pre class="dcode">BS_WorkingCapital =
+[BS_CurrentAssets] - [BS_CurrentLiab]</pre>
+            <div class="ddesc">反映企業短期內可自由動用的絕對金額。正值表示短期財務健康，負值需引起關注。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式11：產權比率</div>
+            <pre class="dcode">BS_EquityRatio =
+DIVIDE([BS_TotalLiab], [BS_TotalEquity])</pre>
+            <div class="ddesc">反映債權人與股東提供資本的相對關係，越高說明負債越多，財務槓桿越大。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式12：所有者權益總額</div>
+            <pre class="dcode">BS_Equity =
+CALCULATE(
+  [BS_EndBalance],
+  FILTER('D科目表', '科目類型'="所有者權益")
+)</pre>
+            <div class="ddesc">精確定位負債與權益表中的權益合計項，用於資本結構分析。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式13：平衡檢查</div>
+            <pre class="dcode">BS_BalanceCheck =
+[BS_TotalAssets] - [BS_TotalLiab] - [BS_TotalEquity]</pre>
+            <div class="ddesc">驗證建模邏輯是否正確，結果應恆等於0。若不為零，表示數據清洗或關聯存在問題。</div>
+          </div>
+          <div class="dc"><span class="dbadge dbs">資產負債表</span>
+            <div class="dname">公式14：資產端過濾（瀑布圖）</div>
+            <pre class="dcode">BS_AssetFilter =
+IF(SELECTEDVALUE('D科目表'[序號])&lt;=33,
+  [BS_EndBalance], BLANK())</pre>
+            <div class="ddesc">在矩陣視覺對象中使用序號過濾，將全表切割為資產端和負債端兩個獨立矩陣。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式15：基礎金額（含單位切換）</div>
+            <pre class="dcode isc">IS_Base =
+DIVIDE(
+  CALCULATE(SUM('F財務匯總表'[金額]),
+    FILTER('D科目表', '報表類型'="損益表")),
+  SELECTEDVALUE('D單位表'[倍率], 1)
+)</pre>
+            <div class="ddesc">損益表的核心基礎度量值，同時集成單位切換邏輯。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式16：借貸方向處理</div>
+            <pre class="dcode isc">IS_Signed =
+[IS_Base] *
+SELECTEDVALUE('D科目表'[方向係數], 1)</pre>
+            <div class="ddesc">根據科目維度表中的方向屬性，收入類（貸方）保持正數，費用類（借方）轉為負數。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式17：矩陣顯示（本期/金額組合）</div>
+            <pre class="dcode isc">IS_Matrix =
+VAR _period = SELECTEDVALUE('輔助_期間'[期間])
+VAR _type = SELECTEDVALUE('輔助_類型'[類型])
+RETURN SWITCH(TRUE(),
+  _period="本月"&&_type="金額", [IS_Signed],
+  _period="本月"&&_type="佔比", DIVIDE([IS_Signed],[IS_Revenue]),
+  _period="累計"&&_type="金額", CALCULATE([IS_Signed], DATESYTD('D日期表'[日期])),
+  _period="累計"&&_type="佔比", DIVIDE(CALCULATE([IS_Signed],DATESYTD('D日期表'[日期])),CALCULATE([IS_Revenue],DATESYTD('D日期表'[日期])))
+)</pre>
+            <div class="ddesc">最複雜的核心公式。用VAR捕捉兩個切片器狀態，SWITCH(TRUE())實現四種組合邏輯。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式18：淨利潤提取</div>
+            <pre class="dcode isc">IS_NetIncome =
+CALCULATE([IS_Base],
+  FILTER('D科目表',
+    '科目簡稱'="淨利潤"))</pre>
+            <div class="ddesc">從損益表中精確定位淨利潤行，用於趨勢圖和KPI計算的核心指標。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式19：淨利率</div>
+            <pre class="dcode isc">IS_NetMargin =
+DIVIDE([IS_NetIncome], [IS_Revenue])</pre>
+            <div class="ddesc">淨利潤佔營業收入的比率，衡量企業最終盈利效率。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式20：營業收入基準值</div>
+            <pre class="dcode isc">IS_Revenue =
+CALCULATE([IS_Base],
+  FILTER('D科目表',
+    '科目簡稱'="營業收入"),
+  ALL('D科目表'[科目名稱]))</pre>
+            <div class="ddesc">確保佔比分析的分母統一，CALCULATE+ALL確保不受外部篩選器干擾。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式21：同比差異額</div>
+            <pre class="dcode isc">IS_YoY_Diff =
+[IS_Signed] - [IS_LYSPM]</pre>
+            <div class="ddesc">分析各科目較去年同期的絕對增減值，直觀反映業績改善或惡化的規模。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式22：同比差異率</div>
+            <pre class="dcode isc">IS_YoY_Rate =
+DIVIDE([IS_YoY_Diff], ABS([IS_LYSPM]))</pre>
+            <div class="ddesc">反映收入、費用等項目的同比增減幅度，百分比形式更直觀反映變動趨勢。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式23：去年同期金額</div>
+            <pre class="dcode isc">IS_LYSPM =
+CALCULATE([IS_Signed],
+  SAMEPERIODLASTYEAR('D日期表'[日期]))</pre>
+            <div class="ddesc">使用SAMEPERIODLASTYEAR函數將計算上下文偏移至去年同一時期。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式24：本年累計（YTD）</div>
+            <pre class="dcode isc">IS_YTD =
+CALCULATE([IS_Signed],
+  DATESYTD('D日期表'[日期]))
+// 等效：TOTALYTD([IS_Signed],'D日期表'[日期])</pre>
+            <div class="ddesc">計算從年初至當前所選日期的累計發生額。兩種寫法完全等效，TOTALYTD更簡潔。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式25：收入佔比</div>
+            <pre class="dcode isc">IS_RevenueShare =
+DIVIDE(
+  [IS_Signed],
+  CALCULATE([IS_Revenue],
+    ALL('D科目表'[科目名稱])))</pre>
+            <div class="ddesc">ALL函數移除對科目表的所有篩選，再重新篩選僅保留營業收入，確保分母始終為總收入。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式26：瀑布圖數據匹配（TREATAS）</div>
+            <pre class="dcode isc">IS_Waterfall =
+CALCULATE(
+  [IS_Signed],
+  TREATAS(
+    VALUES('輔助_瀑布'[關聯名稱]),
+    'D科目表'[科目名稱]))</pre>
+            <div class="ddesc">TREATAS在度量值內動態建立篩選路徑，讓輔助表控制主表，保持模型簡潔高效。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式27：淨利潤 YTD 趨勢</div>
+            <pre class="dcode isc">IS_NetIncome_YTD =
+CALCULATE([IS_NetIncome],
+  DATESYTD('D日期表'[日期]))</pre>
+            <div class="ddesc">展示淨利潤隨月份累加的趨勢，反映年度目標達成進度。</div>
+          </div>
+          <div class="dc"><span class="dbadge dis">損益表</span>
+            <div class="dname">公式28：瀑布圖過濾（排除合計項）</div>
+            <pre class="dcode isc">IS_WF_Filter =
+IF(
+  SELECTEDVALUE('D科目表'[是否合計])=0,
+  [IS_Signed],
+  BLANK())</pre>
+            <div class="ddesc">在瀑布圖中排除中間合計項（如「營業總成本」），防止重複計入。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式29：期初餘額</div>
+            <pre class="dcode cfc">CF_OpenBalance =
+FIRSTNONBLANKVALUE(
+  'D日期表'[日期],
+  CALCULATE([CF_Base])
+)</pre>
+            <div class="ddesc">FIRSTNONBLANKVALUE獲取所選日期範圍內第一個非空日期的金額，與LASTNONBLANKVALUE形成對稱。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式30：現金流量表顯示金額（混合邏輯）</div>
+            <pre class="dcode cfc">CF_Display =
+SWITCH(
+  SELECTEDVALUE('D科目表'[資料類型]),
+  "時點", FIRSTNONBLANKVALUE('D日期表'[日期], CALCULATE([CF_Base])),
+  "期間", SUM('F財務匯總表'[金額]),
+  BLANK()
+)</pre>
+            <div class="ddesc">結合FIRSTNONBLANKVALUE（期初）與SUM（活動流量）的核心混合邏輯，一個度量值同時正確處理所有現金流量項目。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式31：支出符號修正</div>
+            <pre class="dcode cfc">CF_Signed =
+[CF_Display] *
+SELECTEDVALUE('D科目表'[方向係數], 1)</pre>
+            <div class="ddesc">專門針對現金流量表，將「支付」類貸方項目（現金流出）轉換為負數，收入類保持正數。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式32：籌資活動淨額提取</div>
+            <pre class="dcode cfc">CF_Financing =
+CALCULATE([CF_Signed],
+  FILTER('D科目表',
+    '簡要名稱'="籌資活動淨額"))</pre>
+            <div class="ddesc">利用簡要名稱字段精確提取現金流量表中的合計項數據，用於三大活動趨勢對比分析。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式33：現金淨增加額</div>
+            <pre class="dcode cfc">CF_NetChange =
+CALCULATE([CF_Signed],
+  FILTER('D科目表',
+    '簡要名稱'="現金淨增加額"))</pre>
+            <div class="ddesc">直接提取現金流量表核心合計項，驗證：CFO+CFI+CFF=現金淨增加額。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式34：活動淨額同比</div>
+            <pre class="dcode cfc">CF_YoY =
+CALCULATE([CF_Signed],
+  SAMEPERIODLASTYEAR('D日期表'[日期]))</pre>
+            <div class="ddesc">專門針對三大活動淨額進行同比計算，在趨勢圖中同時展示本年與去年的活動淨額曲線。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式35：淨流量 YTD</div>
+            <pre class="dcode cfc">CF_NetYTD =
+CALCULATE([CF_NetChange],
+  DATESYTD('D日期表'[日期]))</pre>
+            <div class="ddesc">反映自年初以來現金的淨流入/流出總量，用於全年現金頭寸管理。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式36：投資活動貢獻度</div>
+            <pre class="dcode cfc">CF_InvestShare =
+DIVIDE([CF_Investing], [CF_NetChange])</pre>
+            <div class="ddesc">分析投資活動對現金變動的影響程度，負值表示現金淨流出（投資支出）。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式37：書簽視圖切換</div>
+            <pre class="dcode cfc">CF_ViewSwitch =
+SELECTEDVALUE('輔助_視圖切換'[視圖], "圖表")</pre>
+            <div class="ddesc">通過DAX切片器聯動書簽，控制視覺對象的隱藏與顯示，實現「表格視圖」與「圖表視圖」動態切換。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式38：現流瀑布圖輔助度量值</div>
+            <pre class="dcode cfc">CF_Waterfall =
+CALCULATE(
+  [CF_Signed],
+  TREATAS(
+    VALUES('輔助_CF瀑布'[關聯名稱]),
+    'D科目表'[科目名稱]))</pre>
+            <div class="ddesc">現金流量表的瀑布圖也採用TREATAS模式，精確控制每個條塊的金額和方向。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式39：瀑布圖自定義排序</div>
+            <pre class="dcode cfc">CF_SortKey =
+SELECTEDVALUE('輔助_CF瀑布'[序號])</pre>
+            <div class="ddesc">創建度量值包裹序號列，確保現金流量表瀑布圖按準則順序：經營→投資→籌資→淨增加。</div>
+          </div>
+          <div class="dc"><span class="dbadge dcf">現金流量表</span>
+            <div class="dname">公式40：無數據填充</div>
+            <pre class="dcode cfc">CF_ZeroFill =
+IF(ISBLANK([CF_Signed]), 0, [CF_Signed])</pre>
+            <div class="ddesc">在DAX末尾加0，強制讓原本返回BLANK的報表項目顯示為0，保持報表結構完整。</div>
+          </div>
+          <div class="dc"><span class="dbadge dge">通用輔助</span>
+            <div class="dname">公式41：動態格式代碼</div>
+            <pre class="dcode gec">FMT_Code =
+IF(SELECTEDVALUE('輔助_類型'[類型])="佔比",
+  "0.0%", "#,##0")</pre>
+            <div class="ddesc">根據切片器選擇，動態切換百分比格式與數值格式，為矩陣的「格式字串」欄位提供動態值。</div>
+          </div>
+          <div class="dc"><span class="dbadge dge">通用輔助</span>
+            <div class="dname">公式42：動態報表名稱</div>
+            <pre class="dcode gec">DYN_Title =
+"財務報表分析 - " &
+SELECTEDVALUE('D報表'[名稱], "綜合報表")</pre>
+            <div class="ddesc">根據篩選器動態更換報表頁面的標題內容，放入文字方塊可隨切片器自動更新。</div>
+          </div>
+          <div class="dc"><span class="dbadge dge">通用輔助</span>
+            <div class="dname">公式43：流動比率預警（條件格式）</div>
+            <pre class="dcode gec">ALERT_CurrentRatio =
+IF([BS_CurrentRatio] &lt; 1, "#FF4444",
+  IF([BS_CurrentRatio] &lt; 2, "#FFAA00", "#00CC66"))</pre>
+            <div class="ddesc">設置度量值控制顏色，當流動比率小於1時（風險狀態）指標卡顯示紅色警告，三色燈機制。</div>
+          </div>
+          <div class="dc"><span class="dbadge dge">通用輔助</span>
+            <div class="dname">公式44：SWITCH 動態度量值（通用範本）</div>
+            <pre class="dcode gec">GEN_Switch =
+VAR _sel1 = SELECTEDVALUE('切片器1'[值])
+VAR _sel2 = SELECTEDVALUE('切片器2'[值])
+RETURN SWITCH(TRUE(),
+  _sel1="A" && _sel2="X", [度量值AX],
+  _sel1="A" && _sel2="Y", [度量值AY],
+  _sel1="B", [度量值B],
+  BLANK())</pre>
+            <div class="ddesc">SWITCH(TRUE())範本，組合多切片器狀態，相比嵌套IF更易讀且效率更高。</div>
+          </div>
+          <div class="dc"><span class="dbadge dge">通用輔助</span>
+            <div class="dname">公式45：計算組佔位符（Tabular Editor）</div>
+            <pre class="dcode gec">SELECTEDMEASURE()
+// 在計算組項目中使用，配合：
+// CALCULATE(SELECTEDMEASURE(), DATESYTD('D日期表'[日期]))</pre>
+            <div class="ddesc">在Tabular Editor中作為度量值佔位符，使計算組能動態應用於任何被選中的度量值。</div>
+          </div>
+          <div class="dc"><span class="dbadge dge">通用輔助</span>
+            <div class="dname">公式46：反轉係數（借貸處理）</div>
+            <pre class="dcode gec">SIGN_Factor =
+CALCULATE(
+  SELECTEDVALUE('D科目表'[方向係數], 1)
+)
+// 使用：[基礎金額] * [SIGN_Factor]</pre>
+            <div class="ddesc">作為通用係數乘以基礎金額，實現自動化報表借貸方向平衡，比IF語句更優雅。</div>
+          </div>
+          <div class="dc"><span class="dbadge dge">通用輔助</span>
+            <div class="dname">公式47：佔比變動率</div>
+            <pre class="dcode gec">SHARE_Change =
+[當期佔比] - CALCULATE([當期佔比],
+  SAMEPERIODLASTYEAR('D日期表'[日期]))</pre>
+            <div class="ddesc">分析各成本費用佔收入比例的變動點數（百分點），精準反映費用管控的改善或惡化。</div>
+          </div>
+          <div class="dc"><span class="dbadge dge">通用輔助</span>
+            <div class="dname">公式48：層級縮進顯示</div>
+            <pre class="dcode gec">INDENT_Name =
+'D科目表'[縮進項目名稱]  // 含前導空格的原始欄位
+// 用於矩陣行標題，模擬財務報表層級縮進視覺效果</pre>
+            <div class="ddesc">直接引用含前導空格的項目名稱列，無需真正的層次結構即可呈現財務報表的視覺層級。</div>
+          </div>
+          <div class="dc"><span class="dbadge dge">通用輔助</span>
+            <div class="dname">公式49：Text.Clean 資料清洗（M語言）</div>
+            <pre class="dcode gec">// Power Query M語言（非DAX）
+= Table.TransformColumns(
+  前一步骤,
+  {"項目名稱",
+    each Text.Clean(Text.Trim(_)),
+    type text}
+)</pre>
+            <div class="ddesc">在Power Query中清除隱藏字符，確保維度表與匯總表能正確建立多對一關係。</div>
+          </div>
+          <div class="dc"><span class="dbadge dge">通用輔助</span>
+            <div class="dname">公式50：獲取當前年份</div>
+            <pre class="dcode gec">CURRENT_Year =
+YEAR(MAX('D日期表'[日期]))
+// 配合年初數計算使用：
+// FILTER(ALL('D日期表'),
+//   YEAR([日期])=CURRENT_Year-1 && MONTH([日期])=12))</pre>
+            <div class="ddesc">獲取當前會計年度，作為定位上年年末（即本年年初）的基準，常與FILTER+ALL組合使用。</div>
+          </div>
+        </div>
+      </section>
+    </div><!-- end content -->
+  </div><!-- end main -->
+  <div id="toast" class="toast"></div>
+  <script>
+    // ─── 全域狀態 ───────────────────────────────────────────────────────
+    const MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+    let D = {};  // 全域資料物件
+    const CHARTS = {}; // 圖表實例
+
+    // ─── 圖表主題 ────────────────────────────────────────────────────────
+    const T = {
+      cy: '#22d3ee', pu: '#a78bfa', em: '#34d399', ro: '#fb7185', am: '#fbbf24', bl: '#60a5fa',
+      ora: '#fb923c', pin: '#f472b6',
+      grid: 'rgba(255,255,255,0.05)', font: '#7a9bbf', size: 11,
+      gOpts: {
+        color: ctx => {
+          const c = ctx.chart, { ctx: cx, chartArea: ca } = c;
+          if (!ca) return 'rgba(34,211,238,.8)';
+          const g = cx.createLinearGradient(0, ca.top, 0, ca.bottom);
+          g.addColorStop(0, 'rgba(34,211,238,.6)'); g.addColorStop(1, 'rgba(34,211,238,.0)');
+          return g;
+        }
+      }
+    };
+    const baseOpts = (custom = {}) => ({
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: custom.legend ?? true, labels: { color: T.font, font: { size: T.size }, boxWidth: 12, padding: 14 } },
+        tooltip: { backgroundColor: 'rgba(7,14,26,.92)', titleColor: T.cy, bodyColor: '#e8f0fe', borderColor: 'rgba(34,211,238,.3)', borderWidth: 1 }
+      },
+      scales: {
+        x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } },
+        y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }
+      },
+      ...custom
+    });
+
+    function mkChart(id, type, data, opts = {}) {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      if (CHARTS[id]) { CHARTS[id].destroy(); }
+      CHARTS[id] = new Chart(el, { type, data, options: baseOpts(opts) });
+      return CHARTS[id];
+    }
+
+    // ─── 資料格式化 ──────────────────────────────────────────────────────
+    function fmtC(v) {
+      const a = Math.abs(v);
+      if (a >= 1e8) return (v / 1e8).toFixed(2) + '億';
+      if (a >= 1e4) return (v / 1e4).toFixed(1) + '萬';
+      return v.toLocaleString();
+    }
+    function fmtP(v) { return (v * 100).toFixed(1) + '%'; }
+    function fmtX(v) { return v.toFixed(2) + 'x'; }
+    function chgHtml(v, isPercent = false) {
+      const cls = v >= 0 ? 'pos' : 'neg';
+      const arrow = v >= 0 ? '▲' : '▼';
+      const txt = isPercent ? fmtP(v) : fmtC(v);
+      return `<span class="${cls}">${arrow} ${txt}</span>`;
+    }
+
+    // ─── 產生範例資料 ─────────────────────────────────────────────────────
+    function genSampleData() {
+      const d = {
+        months: [...MONTHS], revenue: [], cost: [], grossProfit: [], opEx: [], opIncome: [],
+        interest: [], tax: [], netIncome: [], depreciation: [], ebit: [],
+        assets: [], currentAssets: [], fixedAssets: [], cash: [], receivables: [], inventory: [],
+        liabilities: [], currentLiabilities: [], shortTermDebt: [], longTermDebt: [],
+        equity: [], retainedEarnings: [],
+        cfo: [], cfi: [], cff: [], netCF: []
+      };
+      const baseRev = 5000000, revG = 0.05;
+      for (let i = 0; i < 12; i++) {
+        const rev = Math.round(baseRev * Math.pow(1 + revG, i) * (0.88 + Math.random() * .24));
+        const cgs = Math.round(rev * (.54 + Math.random() * .06));
+        const opex = Math.round(rev * (.18 + Math.random() * .06));
+        const dep = Math.round(rev * .04);
+        const gp = rev - cgs;
+        const opi = gp - opex;
+        const ebit = opi;
+        const inter = Math.round(rev * .01);
+        const tax = Math.round(Math.max(0, opi - inter) * .2);
+        const ni = opi - inter - tax;
+        d.revenue.push(rev); d.cost.push(cgs); d.grossProfit.push(gp);
+        d.opEx.push(opex); d.opIncome.push(opi); d.interest.push(inter);
+        d.depreciation.push(dep); d.ebit.push(ebit); d.tax.push(tax); d.netIncome.push(ni);
+        const ta = Math.round(18000000 + (i * 900000) * (0.9 + Math.random() * .2));
+        const ca = Math.round(ta * .42);
+        const fa = ta - ca;
+        const rec = Math.round(ca * .35);
+        const inv = Math.round(ca * .28);
+        const cs = Math.round(ca * .22);
+        const tl = Math.round(ta * .52 + (i * 120000) * (0.9 + Math.random() * .2));
+        const cl = Math.round(tl * .58);
+        const std = Math.round(cl * .5);
+        const ltd = tl - cl;
+        const eq = ta - tl;
+        const re = Math.round(eq * .6);
+        d.assets.push(ta); d.currentAssets.push(ca); d.fixedAssets.push(fa);
+        d.cash.push(cs); d.receivables.push(rec); d.inventory.push(inv);
+        d.liabilities.push(tl); d.currentLiabilities.push(cl);
+        d.shortTermDebt.push(std); d.longTermDebt.push(ltd);
+        d.equity.push(eq); d.retainedEarnings.push(re);
+        const cfo = ni + dep + Math.round(Math.random() * 100000 - 50000);
+        const cfi = Math.round(-ta * .03 * (0.8 + Math.random() * .4));
+        const cff = Math.round((Math.random() > .5 ? 1 : -1) * 200000 * (0.5 + Math.random()));
+        d.cfo.push(cfo); d.cfi.push(cfi); d.cff.push(cff); d.netCF.push(cfo + cfi + cff);
+      }
+      return d;
+    }
+    D = genSampleData();
+
+    // ─── 導覽邏輯 ─────────────────────────────────────────────────────────
+    document.querySelectorAll('.nav').forEach(n => {
+      n.addEventListener('click', () => {
+        document.querySelectorAll('.nav').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+        n.classList.add('active');
+        const pid = n.dataset.page;
+        document.getElementById(pid)?.classList.add('active');
+        document.getElementById('tTitle').textContent = n.dataset.title || '';
+        document.getElementById('tSub').textContent = n.dataset.sub || '';
+        setTimeout(() => renderPage(pid), 50);
+      });
+    });
+
+    // ─── 顯示 Toast ──────────────────────────────────────────────────────
+    function toast(msg, type = 'ok') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.style.borderLeftColor = type === 'ok' ? 'var(--em)' : type === 'warn' ? 'var(--am)' : 'var(--ro)';
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 3200);
+    }
+
+    // ─── KPI 建立 ─────────────────────────────────────────────────────────
+    function buildKPIs(containerId, items) {
+      const c = document.getElementById(containerId);
+      if (!c) return;
+      c.innerHTML = items.map(({ label, value, change, cls = 'cy', isPercent = false }) => `
+    <div class="glass kc ${cls}">
+      <div class="klbl">${label}</div>
+      <div class="kval">${value}</div>
+      ${change !== undefined ? `<div class="kchg">${chgHtml(change, isPercent)} 同比</div>` : ''}
+    </div>`).join('');
+    }
+
+    // ─── 矩陣表填充 ──────────────────────────────────────────────────────
+    function fillMatrix(tbodyId, rowKeys, data, fmt = fmtC) {
+      const tbody = document.getElementById(tbodyId);
+      if (!tbody) return;
+      // Add month headers to thead
+      const thead = tbody.closest('table').querySelector('thead tr');
+      if (thead && thead.children.length === 1) {
+        data.months.forEach(m => { const th = document.createElement('th'); th.textContent = m; thead.appendChild(th); });
+      }
+      // Fill rows
+      Array.from(tbody.querySelectorAll('tr')).forEach((tr, i) => {
+        const key = rowKeys[i];
+        if (!key) return; // 跳過設定為 null 的行（如標題行），防止破壞 colspan
+        let vals = [];
+        let curFmt = fmt;
+        if (typeof key === 'string') {
+          vals = data[key] || [];
+        } else if (typeof key === 'function') {
+          vals = data.months.map((_, idx) => key(data, idx));
+        } else if (typeof key === 'object') {
+          vals = typeof key.k === 'function' ? data.months.map((_, idx) => key.k(data, idx)) : (data[key.k] || []);
+          if (key.fmt) curFmt = key.fmt;
+        }
+        // remove old td (except first)
+        while (tr.children.length > 1) tr.removeChild(tr.lastChild);
+        vals.forEach(v => {
+          const td = document.createElement('td');
+          td.textContent = v !== null && !isNaN(v) ? curFmt(v) : '-';
+          if (v < 0) td.style.color = 'var(--ro)';
+          tr.appendChild(td);
+        });
+      });
+    }
+  </script>
+  <script>
+    // ═══ P1 財務總覽 ═══════════════════════════════════════════════════════════
+    function renderP1() {
+      const d = D, n = d.months.length - 1;
+      const rev = d.revenue[n], ni = d.netIncome[n];
+      const revPrev = d.revenue[n - 1] || rev, niPrev = d.netIncome[n - 1] || ni;
+      const gm = d.grossProfit[n] / rev, nm = ni / rev, roe = ni / d.equity[n];
+      buildKPIs('kg1', [
+        { label: '本月營業收入', value: fmtC(rev), change: (rev - revPrev) / revPrev, isPercent: true, cls: 'cy' },
+        { label: '本月淨利潤', value: fmtC(ni), change: (ni - niPrev) / Math.abs(niPrev), isPercent: true, cls: 'em' },
+        { label: '毛利率', value: fmtP(gm), cls: 'pu' },
+        { label: '淨利率', value: fmtP(nm), cls: 'am' },
+        { label: 'ROE', value: fmtP(roe), cls: 'bl' },
+        { label: '資產負債率', value: fmtP(d.liabilities[n] / d.assets[n]), cls: 'ro' },
+        { label: '流動比率', value: fmtX(d.currentAssets[n] / d.currentLiabilities[n]), cls: 'cy' },
+        { label: '現金餘額', value: fmtC(d.cash[n]), cls: 'em' },
+      ]);
+      // c1a: 趨勢
+      mkChart('c1a', 'bar', {
+        labels: d.months, datasets: [
+          { label: '營業收入', data: d.revenue, backgroundColor: T.cy + '40', borderColor: T.cy, borderWidth: 2, type: 'bar' },
+          { label: '淨利潤', data: d.netIncome, type: 'line', borderColor: T.em, backgroundColor: T.em + '20', borderWidth: 2, tension: .4, fill: true, yAxisID: 'y1' },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtC(v) } }, y1: { position: 'right', grid: { display: false }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtC(v) } } } });
+      // c1b: 利潤結構餅圖
+      const cost = d.cost[n], opex = d.opEx[n], gp = d.grossProfit[n];
+      mkChart('c1b', 'doughnut', {
+        labels: ['營業成本', '營業費用', '稅與其他', '淨利潤'],
+        datasets: [{ data: [cost, opex, d.tax[n], ni], backgroundColor: [T.ro + 'cc', T.am + 'cc', T.bl + 'cc', T.em + 'cc'], borderWidth: 0, hoverOffset: 8 }]
+      },
+        { plugins: { legend: { position: 'bottom', labels: { color: T.font, font: { size: 10 }, boxWidth: 10, padding: 10 } } }, scales: { x: { display: false }, y: { display: false } } });
+      // c1c: 毛/淨利率
+      mkChart('c1c', 'line', {
+        labels: d.months, datasets: [
+          { label: '毛利率', data: d.revenue.map((r, i) => d.grossProfit[i] / r), borderColor: T.cy, backgroundColor: T.cy + '15', borderWidth: 2, tension: .4, fill: true },
+          { label: '淨利率', data: d.revenue.map((r, i) => d.netIncome[i] / r), borderColor: T.em, backgroundColor: T.em + '15', borderWidth: 2, tension: .4, fill: true },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtP(v) } } } });
+      // c1d: YTD累計
+      const ytdRev = d.revenue.reduce((a, b, i) => ({ ...a, [i]: a[i - 1] ? a[i - 1] + b : b }), {});
+      const ytdNI = d.netIncome.reduce((a, b, i) => ({ ...a, [i]: a[i - 1] ? a[i - 1] + b : b }), {});
+      mkChart('c1d', 'line', {
+        labels: d.months, datasets: [
+          { label: 'YTD營收', data: Object.values(ytdRev), borderColor: T.cy, borderWidth: 2, tension: .4 },
+          { label: 'YTD淨利', data: Object.values(ytdNI), borderColor: T.em, borderWidth: 2, tension: .4 },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtC(v) } } } });
+    }
+
+    // ═══ P2 資產負債表 ══════════════════════════════════════════════════════════
+    function renderP2() {
+      const d = D, n = d.months.length - 1;
+      const dr = d.liabilities[n] / d.assets[n];
+      const cr = d.currentAssets[n] / d.currentLiabilities[n];
+      buildKPIs('kg2', [
+        { label: '總資產', value: fmtC(d.assets[n]), cls: 'cy' },
+        { label: '總負債', value: fmtC(d.liabilities[n]), cls: 'ro' },
+        { label: '所有者權益', value: fmtC(d.equity[n]), cls: 'em' },
+        { label: '資產負債率', value: fmtP(dr), cls: dr > 0.7 ? 'ro' : dr > 0.5 ? 'am' : 'em' },
+        { label: '流動比率', value: fmtX(cr), cls: cr < 1 ? 'ro' : cr < 2 ? 'am' : 'em' },
+        { label: '速動比率', value: fmtX((d.currentAssets[n] - d.inventory[n]) / d.currentLiabilities[n]), cls: 'bl' },
+        { label: '現金比率', value: fmtX(d.cash[n] / d.currentLiabilities[n]), cls: 'pu' },
+        { label: '營運資本', value: fmtC(d.currentAssets[n] - d.currentLiabilities[n]), cls: 'am' },
+      ]);
+      // c2a: 堆疊資產負債
+      mkChart('c2a', 'bar', {
+        labels: d.months, datasets: [
+          { label: '流動資產', data: d.currentAssets, backgroundColor: T.cy + '80', stack: 'a' },
+          { label: '非流動資產', data: d.assets.map((a, i) => a - d.currentAssets[i]), backgroundColor: T.bl + '80', stack: 'a' },
+          { label: '流動負債', data: d.currentLiabilities, backgroundColor: T.ro + '70', stack: 'b' },
+          { label: '長期負債', data: d.longTermDebt, backgroundColor: T.am + '70', stack: 'b' },
+          { label: '所有者權益', data: d.equity, backgroundColor: T.em + '70', stack: 'b' },
+        ]
+      }, { scales: { x: { stacked: true, grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { stacked: true, grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtC(v) } } } });
+      // c2b: 資產成分甜甜圈
+      const ln = d.months.length - 1;
+      mkChart('c2b', 'doughnut', {
+        labels: ['現金', '應收帳款', '存貨', '固定資產', '其他'],
+        datasets: [{
+          data: [d.cash[ln], d.receivables[ln], d.inventory[ln], d.fixedAssets[ln],
+          d.currentAssets[ln] - d.cash[ln] - d.receivables[ln] - d.inventory[ln]],
+          backgroundColor: [T.cy + 'cc', T.pu + 'cc', T.am + 'cc', T.bl + 'cc', T.em + 'cc'], borderWidth: 0, hoverOffset: 8
+        }]
+      },
+        { plugins: { legend: { position: 'bottom', labels: { color: T.font, font: { size: 10 }, boxWidth: 10, padding: 8 } } }, scales: { x: { display: false }, y: { display: false } } });
+      // c2c: 償債能力
+      mkChart('c2c', 'line', {
+        labels: d.months, datasets: [
+          { label: '流動比率', data: d.currentAssets.map((ca, i) => ca / d.currentLiabilities[i]), borderColor: T.cy, borderWidth: 2, tension: .4 },
+          { label: '速動比率', data: d.currentAssets.map((ca, i) => (ca - d.inventory[i]) / d.currentLiabilities[i]), borderColor: T.pu, borderWidth: 2, tension: .4 },
+          { label: '資產負債率', data: d.liabilities.map((tl, i) => tl / d.assets[i]), borderColor: T.ro, borderWidth: 2, tension: .4, yAxisID: 'y1' },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => v.toFixed(2) + 'x' } }, y1: { position: 'right', grid: { display: false }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtP(v) } } } });
+      // c2d: 資本結構
+      mkChart('c2d', 'bar', {
+        labels: d.months, datasets: [
+          { label: '負債佔比', data: d.liabilities.map((tl, i) => tl / d.assets[i] * 100), backgroundColor: T.ro + '80', stack: 's' },
+          { label: '權益佔比', data: d.equity.map((eq, i) => eq / d.assets[i] * 100), backgroundColor: T.em + '80', stack: 's' },
+        ]
+      }, { scales: { x: { stacked: true, grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { stacked: true, max: 100, grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => v + '%' } } } });
+      // 填充矩陣表
+      const bsKeys = [null, 'currentAssets', 'cash', 'receivables', 'inventory', (d, i) => d.assets[i] - d.currentAssets[i], 'fixedAssets', 'assets', null, 'currentLiabilities', 'shortTermDebt', (d, i) => d.currentLiabilities[i] - d.shortTermDebt[i], 'longTermDebt', 'longTermDebt', 'liabilities', 'equity', 'retainedEarnings', 'assets'];
+      fillMatrix('bs-matrix-body', bsKeys, D);
+    }
+
+    // ═══ P3 損益表 ══════════════════════════════════════════════════════════════
+    function renderP3() {
+      const d = D, n = d.months.length - 1;
+      const gm = d.grossProfit[n] / d.revenue[n], nm = d.netIncome[n] / d.revenue[n], om = d.opIncome[n] / d.revenue[n];
+      buildKPIs('kg3', [
+        { label: '本月營業收入', value: fmtC(d.revenue[n]), cls: 'cy' },
+        { label: '毛利', value: fmtC(d.grossProfit[n]), cls: 'em' },
+        { label: '毛利率', value: fmtP(gm), cls: gm > 0.35 ? 'em' : gm > 0.2 ? 'am' : 'ro' },
+        { label: '營業利益', value: fmtC(d.opIncome[n]), cls: 'pu' },
+        { label: '營業利益率', value: fmtP(om), cls: 'bl' },
+        { label: '本月淨利', value: fmtC(d.netIncome[n]), cls: 'em' },
+        { label: '淨利率', value: fmtP(nm), cls: nm > 0.1 ? 'em' : nm > 0.05 ? 'am' : 'ro' },
+        { label: 'EBIT', value: fmtC(d.ebit[n]), cls: 'am' },
+      ]);
+      // c3a: 瀑布圖
+      const rev = d.revenue[n], cgs = d.cost[n], opex = d.opEx[n], inter = d.interest[n], tax = d.tax[n], ni = d.netIncome[n];
+      const wfLabels = ['營業收入', '(-)營業成本', '毛利', '(-)營業費用', '營業利益', '(-)利息', '(-)所得稅', '淨利潤'];
+      const wfVals = [rev, -cgs, rev - cgs, -opex, rev - cgs - opex, -inter, -tax, ni];
+      const colors = wfVals.map((v, i) => i === 0 || i === 2 || i === 4 || i === 7 ? (v >= 0 ? T.em : T.ro) : (v < 0 ? T.ro : T.em));
+      mkChart('c3a', 'bar', { labels: wfLabels, datasets: [{ label: '損益結構', data: wfVals.map(v => Math.abs(v)), backgroundColor: colors + 'cc', borderColor: colors, borderWidth: 1 }] },
+        { plugins: { legend: { display: false } }, scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtC(v) } } } });
+      // c3b: 利潤率趨勢
+      mkChart('c3b', 'line', {
+        labels: d.months, datasets: [
+          { label: '毛利率', data: d.revenue.map((r, i) => d.grossProfit[i] / r * 100), borderColor: T.cy, borderWidth: 2, tension: .4, fill: 'origin', backgroundColor: T.cy + '12' },
+          { label: '營業利益率', data: d.revenue.map((r, i) => d.opIncome[i] / r * 100), borderColor: T.pu, borderWidth: 2, tension: .4 },
+          { label: '淨利率', data: d.revenue.map((r, i) => d.netIncome[i] / r * 100), borderColor: T.em, borderWidth: 2, tension: .4 },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => v.toFixed(1) + '%' } } } });
+      // c3c: 收入 vs 成本
+      mkChart('c3c', 'bar', {
+        labels: d.months, datasets: [
+          { label: '營業收入', data: d.revenue, backgroundColor: T.cy + '70', borderColor: T.cy, borderWidth: 1.5 },
+          { label: '營業成本', data: d.cost, backgroundColor: T.ro + '70', borderColor: T.ro, borderWidth: 1.5 },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtC(v) } } } });
+      // c3d: 費用雷達
+      const latest = d.months.length - 1;
+      const revL = d.revenue[latest];
+      mkChart('c3d', 'radar', {
+        labels: ['銷售費用', '管理費用', '研發費用', '財務費用', '折舊攤銷'],
+        datasets: [{
+          label: '費用佔收入%', data: [d.opEx[latest] * .4 / revL * 100, d.opEx[latest] * .35 / revL * 100, d.opEx[latest] * .1 / revL * 100, d.interest[latest] / revL * 100, d.depreciation[latest] / revL * 100],
+          borderColor: T.pu, backgroundColor: T.pu + '25', pointBackgroundColor: T.pu, borderWidth: 2
+        }]
+      },
+        { scales: { r: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 9 }, backdropColor: 'transparent' }, pointLabels: { color: T.font, font: { size: 10 } } } }, plugins: { legend: { display: false } } });
+      const isKeys = ['revenue', 'cost', 'grossProfit', 'opEx', 'opIncome', 'interest', 'tax', 'netIncome', null,
+        { k: (d, i) => d.grossProfit[i] / d.revenue[i], fmt: fmtP },
+        { k: (d, i) => d.opIncome[i] / d.revenue[i], fmt: fmtP },
+        { k: (d, i) => d.netIncome[i] / d.revenue[i], fmt: fmtP }];
+      fillMatrix('is-matrix-body', isKeys, D);
+    }
+
+    // ═══ P4 現金流量表 ══════════════════════════════════════════════════════════
+    function renderP4() {
+      const d = D, n = d.months.length - 1;
+      const cfo = d.cfo[n], cfi = d.cfi[n], cff = d.cff[n], ncf = d.netCF[n];
+      buildKPIs('kg4', [
+        { label: '營業現金流（CFO）', value: fmtC(cfo), cls: cfo >= 0 ? 'em' : 'ro' },
+        { label: '投資現金流（CFI）', value: fmtC(cfi), cls: cfi >= 0 ? 'em' : 'ro' },
+        { label: '籌資現金流（CFF）', value: fmtC(cff), cls: cff >= 0 ? 'cy' : 'am' },
+        { label: '現金淨增加', value: fmtC(ncf), cls: ncf >= 0 ? 'em' : 'ro' },
+        { label: 'CFO/淨利比', value: fmtX(cfo / (d.netIncome[n] || 1)), cls: 'bl' },
+        { label: '自由現金流', value: fmtC(cfo + cfi), cls: 'pu' },
+        { label: '期末現金餘額', value: fmtC(d.cash[n]), cls: 'cy' },
+        { label: '籌資比率', value: fmtP(Math.abs(cff) / (Math.abs(cfo) + Math.abs(cfi) + Math.abs(cff) || 1)), cls: 'am' },
+      ]);
+      // c4a: 三大活動趨勢
+      mkChart('c4a', 'line', {
+        labels: d.months, datasets: [
+          { label: 'CFO 營業', data: d.cfo, borderColor: T.em, backgroundColor: T.em + '15', borderWidth: 2, tension: .4, fill: true },
+          { label: 'CFI 投資', data: d.cfi, borderColor: T.ro, backgroundColor: T.ro + '12', borderWidth: 2, tension: .4, fill: true },
+          { label: 'CFF 籌資', data: d.cff, borderColor: T.am, backgroundColor: T.am + '12', borderWidth: 2, tension: .4 },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtC(v) } } } });
+      // c4b: 現金淨流量瀑布圖
+      const ytdCFO = d.cfo.reduce((s, v) => s + v, 0), ytdCFI = d.cfi.reduce((s, v) => s + v, 0), ytdCFF = d.cff.reduce((s, v) => s + v, 0);
+      const wfC = [ytdCFO, ytdCFI, ytdCFF, ytdCFO + ytdCFI + ytdCFF];
+      const wfColors = wfC.map((v, i) => i === 3 ? (v >= 0 ? T.em : T.ro) : v >= 0 ? T.cy : T.ro);
+      mkChart('c4b', 'bar', {
+        labels: ['CFO 營業', 'CFI 投資', 'CFF 籌資', '淨現金流'],
+        datasets: [{ data: wfC.map(v => Math.abs(v)), backgroundColor: wfColors.map(c => c + 'cc'), borderColor: wfColors, borderWidth: 1.5 }]
+      },
+        { plugins: { legend: { display: false } }, scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtC(v) } } } });
+      // c4c: CFO造血能力
+      mkChart('c4c', 'line', {
+        labels: d.months, datasets: [
+          { label: 'CFO/淨利比', data: d.cfo.map((v, i) => v / (d.netIncome[i] || 1)), borderColor: T.cy, borderWidth: 2, tension: .4 },
+          { label: '基準線=1', data: Array(12).fill(1), borderColor: T.am, borderWidth: 1, borderDash: [4, 4], pointRadius: 0 },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => v.toFixed(2) + 'x' } } } });
+      // c4d: 佔比餅圖
+      const absTotal = Math.abs(ytdCFO) + Math.abs(ytdCFI) + Math.abs(ytdCFF);
+      mkChart('c4d', 'doughnut', {
+        labels: ['CFO 營業', 'CFI 投資', 'CFF 籌資'],
+        datasets: [{ data: [Math.abs(ytdCFO), Math.abs(ytdCFI), Math.abs(ytdCFF)], backgroundColor: [T.em + 'cc', T.ro + 'cc', T.am + 'cc'], borderWidth: 0, hoverOffset: 8 }]
+      },
+        { plugins: { legend: { position: 'bottom', labels: { color: T.font, font: { size: 10 }, boxWidth: 10 } } }, scales: { x: { display: false }, y: { display: false } } });
+      const cfKeys = [null, 'netIncome', 'depreciation', 'cfo', null, 'cfi', null, 'cff', 'netCF', (d, i) => d.cash[i] - d.netCF[i], 'cash'];
+      fillMatrix('cf-matrix-body', cfKeys, D);
+    }
+
+    // ═══ P5 獲利能力 ════════════════════════════════════════════════════════════
+    function renderP5() {
+      const d = D, n = d.months.length - 1;
+      const roe = d.netIncome[n] / d.equity[n], roa = d.netIncome[n] / d.assets[n];
+      const npm = d.netIncome[n] / d.revenue[n], ato = d.revenue[n] / d.assets[n];
+      const interest_cov = d.ebit[n] / (d.interest[n] || 1);
+      buildKPIs('kg5', [
+        { label: 'ROE 股東權益報酬率', value: fmtP(roe), cls: roe > 0.15 ? 'em' : roe > 0.08 ? 'am' : 'ro' },
+        { label: 'ROA 資產報酬率', value: fmtP(roa), cls: roa > 0.06 ? 'em' : roa > 0.03 ? 'am' : 'ro' },
+        { label: '淨利率', value: fmtP(npm), cls: 'cy' },
+        { label: '資產週轉率', value: fmtX(ato), cls: 'pu' },
+        { label: 'EBIT利息保障', value: fmtX(interest_cov), cls: interest_cov > 3 ? 'em' : 'ro' },
+      ]);
+      // c5a: 獲利趨勢
+      mkChart('c5a', 'line', {
+        labels: d.months, datasets: [
+          { label: 'ROE', data: d.netIncome.map((ni, i) => ni / d.equity[i] * 100), borderColor: T.cy, borderWidth: 2.5, tension: .4 },
+          { label: 'ROA', data: d.netIncome.map((ni, i) => ni / d.assets[i] * 100), borderColor: T.pu, borderWidth: 2, tension: .4 },
+          { label: '淨利率', data: d.netIncome.map((ni, i) => ni / d.revenue[i] * 100), borderColor: T.em, borderWidth: 2, tension: .4 },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => v.toFixed(1) + '%' } } } });
+      // c5b: 雷達圖
+      mkChart('c5b', 'radar', {
+        labels: ['ROE', 'ROA', '毛利率', '淨利率', '資產週轉', '利息保障/10'],
+        datasets: [{
+          label: '最新期', data: [roe * 100, roa * 100, d.grossProfit[n] / d.revenue[n] * 100, npm * 100, ato * 100, Math.min(interest_cov, 20) / 20 * 100],
+          borderColor: T.cy, backgroundColor: T.cy + '20', pointBackgroundColor: T.cy, borderWidth: 2
+        }]
+      },
+        { scales: { r: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 9 }, backdropColor: 'transparent' }, pointLabels: { color: T.font, font: { size: 10 } } } }, plugins: { legend: { display: false } } });
+      // c5c: EBIT趨勢
+      mkChart('c5c', 'bar', {
+        labels: d.months, datasets: [
+          { label: 'EBIT', data: d.ebit, backgroundColor: T.am + '80', borderColor: T.am, borderWidth: 1.5 },
+          { label: '利息保障(右)', data: d.ebit.map((e, i) => e / (d.interest[i] || 1)), type: 'line', borderColor: T.ro, borderWidth: 2, tension: .4, yAxisID: 'y1' },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtC(v) } }, y1: { position: 'right', grid: { display: false }, ticks: { color: T.font, font: { size: 10 }, callback: v => v.toFixed(1) + 'x' } } } });
+      // c5d: 資產週轉率
+      mkChart('c5d', 'line', {
+        labels: d.months, datasets: [
+          { label: '資產週轉率', data: d.revenue.map((r, i) => r / d.assets[i]), borderColor: T.pu, backgroundColor: T.pu + '20', borderWidth: 2, tension: .4, fill: true },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => v.toFixed(3) + 'x' } } } });
+      // c5e: ROE分解
+      mkChart('c5e', 'bar', {
+        labels: d.months, datasets: [
+          { label: '淨利率%', data: d.netIncome.map((ni, i) => ni / d.revenue[i] * 100), backgroundColor: T.em + '80', stack: 's' },
+          { label: '資產週轉*10', data: d.revenue.map((r, i) => r / d.assets[i] * 10), backgroundColor: T.am + '80', stack: 's' },
+          { label: '財務槓桿', data: d.assets.map((a, i) => a / d.equity[i]), backgroundColor: T.pu + '80', stack: 's' },
+        ]
+      }, { scales: { x: { stacked: true, grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { stacked: true, grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } } } });
+    }
+  </script>
+  <script>
+    // ═══ P6 流動性與營運 ═══════════════════════════════════════════════════════
+    function renderP6() {
+      const d = D, n = d.months.length - 1;
+      const cr = d.currentAssets[n] / d.currentLiabilities[n];
+      const qr = (d.currentAssets[n] - d.inventory[n]) / d.currentLiabilities[n];
+      const days = (d.inventory[n] / (d.cost[n] * 12)) * 365;
+      const arDays = (d.receivables[n] / (d.revenue[n] * 12)) * 365;
+      buildKPIs('kg6', [
+        { label: '流動比率', value: fmtX(cr), cls: cr >= 2 ? 'em' : cr >= 1 ? 'am' : 'ro' },
+        { label: '速動比率', value: fmtX(qr), cls: qr >= 1 ? 'em' : 'am' },
+        { label: '現金比率', value: fmtX(d.cash[n] / d.currentLiabilities[n]), cls: 'bl' },
+        { label: '營運資本', value: fmtC(d.currentAssets[n] - d.currentLiabilities[n]), cls: 'cy' },
+        { label: '存貨週轉天數', value: Math.round(days) + '天', cls: 'am' },
+        { label: '應收帳款天數', value: Math.round(arDays) + '天', cls: 'pu' },
+      ]);
+      // c6a: 比率趨勢
+      mkChart('c6a', 'line', {
+        labels: d.months, datasets: [
+          { label: '流動比率', data: d.currentAssets.map((ca, i) => ca / d.currentLiabilities[i]), borderColor: T.cy, borderWidth: 2, tension: .4, backgroundColor: T.cy + '15', fill: true },
+          { label: '速動比率', data: d.currentAssets.map((ca, i) => (ca - d.inventory[i]) / d.currentLiabilities[i]), borderColor: T.pu, borderWidth: 2, tension: .4 },
+          { label: '現金比率', data: d.cash.map((c, i) => c / d.currentLiabilities[i]), borderColor: T.em, borderWidth: 2, tension: .4, borderDash: [5, 5] },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => v.toFixed(1) + 'x' } } } });
+      // c6b: 營運資本
+      mkChart('c6b', 'bar', {
+        labels: d.months, datasets: [
+          { label: '營運資本', data: d.currentAssets.map((ca, i) => ca - d.currentLiabilities[i]), backgroundColor: T.am + '80', borderColor: T.am, borderWidth: 1.5 },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => fmtC(v) } } } });
+      // c6c: 存貨天數
+      mkChart('c6c', 'line', {
+        labels: d.months, datasets: [
+          { label: '存貨週轉天數', data: d.inventory.map((inv, i) => inv / (d.cost[i] * 12 || 1) * 365), borderColor: T.ro, backgroundColor: T.ro + '20', borderWidth: 2, tension: .4, fill: true },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => Math.round(v) + '天' } } } });
+      // c6d: 應收天數
+      mkChart('c6d', 'line', {
+        labels: d.months, datasets: [
+          { label: '應收帳款天數', data: d.receivables.map((rec, i) => rec / (d.revenue[i] * 12 || 1) * 365), borderColor: T.bl, backgroundColor: T.bl + '20', borderWidth: 2, tension: .4, fill: true },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => Math.round(v) + '天' } } } });
+    }
+
+    // ═══ P7 杜邦分析 ════════════════════════════════════════════════════════════
+    function renderP7() {
+      const d = D, n = d.months.length - 1;
+      const ni = d.netIncome[n], rev = d.revenue[n], ta = d.assets[n], eq = d.equity[n];
+      const npm = ni / rev, ato = rev / ta, em = ta / eq, roe = npm * ato * em;
+      buildKPIs('kg7', [
+        { label: 'ROE 權益報酬率', value: fmtP(roe), cls: 'cy' },
+        { label: '淨利率', value: fmtP(npm), cls: 'pu' },
+        { label: '資產週轉率', value: fmtX(ato), cls: 'am' },
+        { label: '權益乘數', value: fmtX(em), cls: 'em' },
+      ]);
+      // 杜邦硬解DOM
+      document.getElementById('dp-roe-v').textContent = fmtP(roe);
+      document.getElementById('dp-npm-v').textContent = fmtP(npm);
+      document.getElementById('dp-ato-v').textContent = fmtX(ato);
+      document.getElementById('dp-em-v').textContent = fmtX(em);
+      // c7a: 三因子趨勢
+      mkChart('c7a', 'line', {
+        labels: d.months, datasets: [
+          { label: '淨利率(%)', data: d.netIncome.map((x, i) => x / d.revenue[i] * 100), borderColor: T.pu, borderWidth: 2, tension: .4 },
+          { label: '資產週轉(x)', data: d.revenue.map((x, i) => x / d.assets[i]), borderColor: T.am, borderWidth: 2, tension: .4, yAxisID: 'y1' },
+          { label: '權益乘數(x)', data: d.assets.map((x, i) => x / d.equity[i]), borderColor: T.em, borderWidth: 2, tension: .4, yAxisID: 'y1' },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 }, callback: v => v + '%' } }, y1: { position: 'right', grid: { display: false }, ticks: { color: T.font, font: { size: 10 }, callback: v => v.toFixed(2) + 'x' } } } });
+      // c7b: ROE歷史堆疊圖
+      mkChart('c7b', 'bar', {
+        labels: d.months, datasets: [
+          { label: '淨利率貢獻', data: d.netIncome.map((x, i) => x / d.revenue[i] * 10), backgroundColor: T.pu + 'aa', stack: 'A' },
+          { label: '資產週轉貢獻', data: d.revenue.map((x, i) => x / d.assets[i]), backgroundColor: T.am + 'aa', stack: 'A' },
+          { label: '權益乘數貢獻', data: d.assets.map((x, i) => x / d.equity[i]), backgroundColor: T.em + 'aa', stack: 'A' },
+          { label: 'ROE總計', data: d.netIncome.map((x, i) => x / d.equity[i] * 100), type: 'line', borderColor: T.cy, borderWidth: 3, tension: .4 }
+        ]
+      }, { scales: { x: { stacked: true, grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { stacked: true, grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } } } });
+    }
+
+    // ═══ P8 Z-Score ════════════════════════════════════════════════════════════
+    function renderP8() {
+      const d = D, n = d.months.length - 1;
+      const ca = d.currentAssets[n], cl = d.currentLiabilities[n], ta = d.assets[n];
+      const re = d.retainedEarnings[n], ebit = d.ebit[n], eq = d.equity[n], tl = d.liabilities[n], rev = d.revenue[n];
+      const x1 = (ca - cl) / ta, x2 = re / ta, x3 = ebit / ta, x4 = eq / tl, x5 = rev / ta;
+      const zScore = 1.2 * x1 + 1.4 * x2 + 3.3 * x3 + 0.6 * x4 + 1.0 * x5;
+
+      buildKPIs('kg8', [
+        { label: 'Z-Score 綜合評分', value: zScore.toFixed(2), cls: zScore > 2.9 ? 'em' : zScore > 1.8 ? 'am' : 'ro' },
+        { label: '流動性 (X1)', value: fmtP(x1), cls: 'cy' },
+        { label: '獲利累積 (X2)', value: fmtP(x2), cls: 'pu' },
+        { label: '資產生產力 (X3)', value: fmtP(x3), cls: 'em' },
+      ]);
+
+      // 更新儀表盤數值
+      const zv = document.getElementById('zscore-val');
+      const zs = document.getElementById('zscore-status');
+      zv.textContent = zScore.toFixed(2);
+      if (zScore > 2.9) { zs.textContent = '安全區 (Low Risk)'; zs.style.color = T.em; zs.style.background = T.em + '20'; zv.style.color = T.em; }
+      else if (zScore > 1.8) { zs.textContent = '灰色區 (Moderate Risk)'; zs.style.color = T.am; zs.style.background = T.am + '20'; zv.style.color = T.am; }
+      else { zs.textContent = '危險區 (High Risk)'; zs.style.color = T.ro; zs.style.background = T.ro + '20'; zv.style.color = T.ro; }
+
+      // 更新明細表
+      document.getElementById('zx1').textContent = x1.toFixed(3); document.getElementById('zx1c').textContent = (1.2 * x1).toFixed(2);
+      document.getElementById('zx2').textContent = x2.toFixed(3); document.getElementById('zx2c').textContent = (1.4 * x2).toFixed(2);
+      document.getElementById('zx3').textContent = x3.toFixed(3); document.getElementById('zx3c').textContent = (3.3 * x3).toFixed(2);
+      document.getElementById('zx4').textContent = x4.toFixed(3); document.getElementById('zx4c').textContent = (0.6 * x4).toFixed(2);
+      document.getElementById('zx5').textContent = x5.toFixed(2); document.getElementById('zx5c').textContent = (1.0 * x5).toFixed(2);
+      document.getElementById('ztotal').textContent = zScore.toFixed(2);
+
+      // c8a: 歷史趨勢
+      const zs_hist = d.months.map((_, i) => {
+        const _ca = d.currentAssets[i], _cl = d.currentLiabilities[i], _ta = d.assets[i];
+        const _re = d.retainedEarnings[i], _ebit = d.ebit[i], _eq = d.equity[i], _tl = d.liabilities[i], _rev = d.revenue[i];
+        return 1.2 * (_ca - _cl) / _ta + 1.4 * _re / _ta + 3.3 * _ebit / _ta + 0.6 * _eq / _tl + 1.0 * _rev / _ta;
+      });
+      mkChart('c8a', 'line', {
+        labels: d.months, datasets: [
+          { label: 'Z-Score', data: zs_hist, borderColor: T.am, backgroundColor: T.am + '20', borderWidth: 3, tension: .3, fill: true },
+          { label: '安全線 (2.9)', data: Array(12).fill(2.9), borderColor: T.em, borderWidth: 2, borderDash: [4, 4], pointRadius: 0 },
+          { label: '危險線 (1.8)', data: Array(12).fill(1.8), borderColor: T.ro, borderWidth: 2, borderDash: [4, 4], pointRadius: 0 },
+        ]
+      }, { scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { min: 0, grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } } } });
+
+      // c8b: 五大因子長條圖
+      mkChart('c8b', 'bar', {
+        labels: ['X1 流動性', 'X2 獲利累積', 'X3 EBIT', 'X4 負債覆蓋', 'X5 營收能力'],
+        datasets: [{
+          label: '貢獻分數', data: [1.2 * x1, 1.4 * x2, 3.3 * x3, 0.6 * x4, 1.0 * x5],
+          backgroundColor: [T.cy + 'cc', T.pu + 'cc', T.em + 'cc', T.bl + 'cc', T.ora + 'cc'], borderWidth: 0
+        }]
+      },
+        { plugins: { legend: { display: false } }, scales: { x: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } }, y: { grid: { color: T.grid }, ticks: { color: T.font, font: { size: 10 } } } } });
+
+      // 儀表盤圖表繪製
+      mkChart('c8gauge', 'doughnut', {
+        labels: ['危險', '灰色', '安全'],
+        datasets: [{ data: [1.8, 1.1, 3.0], backgroundColor: [T.ro + 'cc', T.am + 'cc', T.em + 'cc'], borderWidth: 0, circumference: 180, rotation: 270 }]
+      }, { plugins: { legend: { display: false }, tooltip: { enabled: false } }, cutout: '80%' });
+    }
+
+    // ═══ 核心控制與資料匯入匯出 ════════════════════════════════════════════════
+    function renderPage(pid) {
+      if (!D.months || D.months.length === 0) return;
+      if (pid === 'p1' || pid === 'p-overview') renderP1();
+      if (pid === 'p2' || pid === 'p-bs') renderP2();
+      if (pid === 'p3' || pid === 'p-is') renderP3();
+      if (pid === 'p4' || pid === 'p-cf') renderP4();
+      if (pid === 'p5' || pid === 'p-profit') renderP5();
+      if (pid === 'p6' || pid === 'p-liq') renderP6();
+      if (pid === 'p7' || pid === 'p-dupont') renderP7();
+      if (pid === 'p8' || pid === 'p-zscore') renderP8();
+      if (pid === 'p-matrix') { renderP2(); renderP3(); renderP4(); } // P9 depends on others to fill matrix
+    }
+
+    function resetData() {
+      D = genSampleData();
+      renderAll();
+      toast('已重置為初始範例資料');
+    }
+
+    function renderAll() {
+      // Find active node
+      const active = document.querySelector('.nav.active');
+      if (active) {
+        renderPage(active.dataset.page);
+      } else {
+        renderP1();
+      }
+    }
+
+    // 匯出 CSV
+    function downloadCSV() {
+      toast('準備下載CSV...');
+      const keys = ['months', 'revenue', 'cost', 'grossProfit', 'opEx', 'opIncome', 'interest', 'tax', 'netIncome', 'depreciation', 'ebit', 'assets', 'currentAssets', 'fixedAssets', 'cash', 'receivables', 'inventory', 'liabilities', 'currentLiabilities', 'shortTermDebt', 'longTermDebt', 'equity', 'retainedEarnings', 'cfo', 'cfi', 'cff', 'netCF'];
+      const zh_keys = ['月份', '營業收入', '營業成本', '毛利', '營業費用', '營業利益', '利息費用', '稅捐', '淨利潤', '折舊與攤銷', 'EBIT', '總資產', '流動資產', '固定資產', '現金', '應收帳款', '存貨', '總負債', '流動負債', '短期借款', '長期借款', '總權益', '保留盈餘', '營業現金流(CFO)', '投資現金流(CFI)', '籌資現金流(CFF)', '淨現金流'];
+
+      let csv = zh_keys.join(',') + '\n';
+      const len = D.months.length;
+      for (let i = 0; i < len; i++) {
+        const row = keys.map(k => D[k][i]);
+        csv += row.join(',') + '\n';
+      }
+
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `財務報表範例資料_V2_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // 匯入資料 (SheetJS)
+    document.getElementById('fileInput').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      toast('讀取檔案中...');
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+          if (jsonData.length > 0) {
+            // Map to D state
+            const num = (row, key1, key2) => Number(row[key1]) || Number(row[key2]) || 0;
+
+            const newD = { months: [], revenue: [], cost: [], grossProfit: [], opEx: [], opIncome: [], interest: [], tax: [], netIncome: [], depreciation: [], ebit: [], assets: [], currentAssets: [], fixedAssets: [], cash: [], receivables: [], inventory: [], liabilities: [], currentLiabilities: [], shortTermDebt: [], longTermDebt: [], equity: [], retainedEarnings: [], cfo: [], cfi: [], cff: [], netCF: [] };
+
+            jsonData.forEach(row => {
+              newD.months.push(row['月份'] || row['Month'] || '');
+              newD.revenue.push(num(row, '營業收入', 'Revenue'));
+              newD.cost.push(num(row, '營業成本', 'Cost'));
+              newD.grossProfit.push(num(row, '毛利', 'GrossProfit'));
+              newD.opEx.push(num(row, '營業費用', 'OpEx'));
+              newD.opIncome.push(num(row, '營業利益', 'OpIncome'));
+              newD.interest.push(num(row, '利息費用', 'Interest'));
+              newD.tax.push(num(row, '稅捐', 'Tax'));
+              newD.netIncome.push(num(row, '淨利潤', 'NetIncome'));
+              newD.depreciation.push(num(row, '折舊與攤銷', 'Depreciation'));
+              newD.ebit.push(num(row, 'EBIT', 'EBIT'));
+
+              newD.assets.push(num(row, '總資產', 'Assets'));
+              newD.currentAssets.push(num(row, '流動資產', 'CurrentAssets'));
+              newD.fixedAssets.push(num(row, '固定資產', 'FixedAssets'));
+              newD.cash.push(num(row, '現金', 'Cash'));
+              newD.receivables.push(num(row, '應收帳款', 'Receivables'));
+              newD.inventory.push(num(row, '存貨', 'Inventory'));
+
+              newD.liabilities.push(num(row, '總負債', 'Liabilities'));
+              newD.currentLiabilities.push(num(row, '流動負債', 'CurrentLiabilities'));
+              newD.shortTermDebt.push(num(row, '短期借款', 'ShortTermDebt'));
+              newD.longTermDebt.push(num(row, '長期借款', 'LongTermDebt'));
+              newD.equity.push(num(row, '總權益', 'Equity'));
+              newD.retainedEarnings.push(num(row, '保留盈餘', 'RetainedEarnings'));
+
+              newD.cfo.push(num(row, '營業現金流(CFO)', 'CFO'));
+              newD.cfi.push(num(row, '投資現金流(CFI)', 'CFI'));
+              newD.cff.push(num(row, '籌資現金流(CFF)', 'CFF'));
+              newD.netCF.push(num(row, '淨現金流', 'NetCF'));
+            });
+
+            D = newD;
+            renderAll();
+            toast('✅ 資料匯入成功並更新圖表！');
+          } else {
+            toast('檔案無資料', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          toast('檔案解析失敗，請確認格式', 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    // Initialization
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        renderP1(); // 初始渲染 P1
+        // Fill all matrices in background
+        renderP2(); renderP3(); renderP4();
+        document.querySelectorAll('.nav').forEach(n => n.classList.remove('active'));
+        document.querySelector('.nav[data-page="p1"]')?.classList.add('active');
+      }, 100);
+    });
+  </script>
+</body>
+
+</html>

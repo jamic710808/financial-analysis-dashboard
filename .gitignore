@@ -1,0 +1,12 @@
+*.pdf
+*.docx
+*.xlsx
+*.png
+pdf_content.txt
+docx_content.txt
+parse.py
+Financial_Analysis_Dashboard.html
+Financial_Analysis_Dashboard_V2_使用說明書.md
+Financial_Analysis_Dashboard_V2_紀錄.md
+Financial_Analysis_Manual.md
+Financial_Analysis_Record.md
