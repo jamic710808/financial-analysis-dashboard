@@ -1,12 +1,32 @@
+# 大型文件
 *.pdf
 *.docx
 *.xlsx
-*.png
-pdf_content.txt
+
+# 解析輸出
 docx_content.txt
-parse.py
+pdf_content.txt
+
+# 圖片
+*.png
+*.jpg
+*.jpeg
+
+# Python 暫存
+__pycache__/
+*.pyc
+
+# 舊版本（保留 V3 和 index.html）
 Financial_Analysis_Dashboard.html
+Financial_Analysis_Dashboard_V2.html
 Financial_Analysis_Dashboard_V2_使用說明書.md
 Financial_Analysis_Dashboard_V2_紀錄.md
 Financial_Analysis_Manual.md
 Financial_Analysis_Record.md
+data_engine.js
+page1_4.js
+page5_8.js
+parse.py
+
+# Google Drive 暫存
+.tmp.driveupload/
