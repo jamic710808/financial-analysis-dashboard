@@ -327,3 +327,143 @@ function estimateTokens(text) {
 ---
 
 *V3.0 開發完成時間：2026年3月19日 | V3.1 AI 模組：2026年4月10日 | 協作工具：Claude AI (Cowork Mode)*
+
+---
+
+## 十二、AI 模組 Bug 修復與功能強化（V3.2 — 2026年4月26日）
+
+### 12.1 Bug 修復清單
+
+#### Bug 1：`extractPageData()` 欄位名稱錯誤 → P5 / P7 / P8 / P10 無資料
+**症狀**：點擊 P5（獲利能力）、P7（杜邦分析）等頁面的 AI 分析，AI 回覆「未收到任何內容」。  
+**根本原因**：`extras` 物件在初始化時使用了不存在的 D 物件欄位：
+- `D.operatingIncome`（不存在）→ 應為 `D.opIncome`
+- `D.operatingExpenses`（不存在）→ 應為 `D.opEx`
+- `D.capex`（不存在）→ D 物件無此欄位
+- 由於 extras 是 eager 物件字面量，**一個欄位出錯整個物件建構失敗**，所有頁面都受影響。
+
+**修復**：
+```javascript
+// 修正欄位名稱
+D.opIncome[i]   // was: D.operatingIncome[i]
+D.opEx          // was: D.operatingExpenses
+
+// capex 用負的投資活動現金流代替
+const capex = (D.cfi || []).map(v => Math.max(0, -v));
+```
+
+#### Bug 2：`extractPageData()` try 塊未閉合 → 語法錯誤
+**症狀**：整個頁面 JavaScript 無法執行。  
+**修復**：補上缺少的 `} catch (e) { console.warn(...); return base; }` 閉合區塊。
+
+#### Bug 3：`aiState.useCorsProxy` vs `aiState.proxyEnabled` 雙重屬性不同步
+**症狀**：儲存設定後重新載入頁面，CORS 代理失效，API 請求直連被 CORS 封鎖。  
+**根本原因**：
+- `_callOpenAI()` / `_callAnthropic()` 讀取 `aiState.useCorsProxy`
+- `saveAISettings()` 儲存 `proxyEnabled`、`loadAISettings()` 恢復 `aiState.proxyEnabled`
+- 頁面重新載入後 `useCorsProxy` 永遠為預設的 `false`
+
+**修復**：統一使用 `aiState.proxyEnabled`，移除 `useCorsProxy`。
+
+#### Bug 4：`AbortController null` 錯誤
+**症狀**：`TypeError: Cannot read properties of null (reading 'signal')`  
+**修復**：在 `sendAIMessage()` 呼叫前加入 `aiState.abortController = new AbortController()`。
+
+#### Bug 5：切換頁面後 AI context bar 不更新（一直顯示 P1）
+**根本原因**：`renderPage()` 只更新全域 `currentPid`，未同步 `aiState.currentPid`。  
+**修復**：在 `renderPage()` 中加入 `aiState.currentPid = pid; updateContextBar(pid);`
+
+#### Bug 6：MiniMax 模型欄位出現雙重 input（殭屍欄位）
+**症狀**：模型設定列同時出現一個 text input 和一個 select dropdown。  
+**根本原因**：`updateModelOptions()` 在切換 `custom → ollama` 時，未移除舊的 `ai-model-custom-input` 就建立新的，造成同 ID 兩個元素。後續切換回 MiniMax 時 `getElementById` 只移除第一個，第二個殭屍留存。  
+**修復**：在建立新 input 前先 remove 舊的：
+```javascript
+const existing = document.getElementById('ai-model-custom-input');
+if (existing) existing.remove();
+```
+
+---
+
+### 12.2 新增功能
+
+#### 功能 1：`financial_cors_proxy.py` — 本機 CORS 代理
+| 項目 | 說明 |
+|------|------|
+| 檔案位置 | `C:\Users\jamic\財務報表分析\financial_cors_proxy.py` |
+| Port | 8080（可透過 `python financial_cors_proxy.py <port>` 指定）|
+| 代理路徑 | `/proxy?url=<目標URL>`（query param 方式）|
+| 功能 | 靜態檔案服務 + CORS 代理轉發，支援所有 AI 供應商 |
+| 特點 | Debug 輸出顯示 Authorization / x-api-key 是否正確傳遞 |
+
+相對 `revenue_cors_proxy.py` 的差異：目標 URL 改用 `?url=` query param 而非 `X-Proxy-Target` header，避免 Anthropic 等供應商對非標準 header 的限制。
+
+#### 功能 2：AI 設定面板折疊 / 展開
+- 「進階設定」區加入 toggle arrow（▾/▸）
+- 儲存設定後自動折疊，減少畫面佔用
+- `toggleConfigSection(forceCollapse?)` 函式控制
+
+#### 功能 3：💾 儲存設定按鈕
+- 在 API Key 列右側加入快速 💾 按鈕
+- 在設定底部加入「💾 儲存設定」（綠色）/ 「🗑 清除設定」（紅色）並排按鈕
+- 呼叫現有 `saveAISettings()`，儲存至 localStorage
+
+#### 功能 4：`sendQuickWithContext()` — 快速建議帶頁面資料
+**問題背景**：快速建議按鈕（綜合分析、異常偵測等）和手動輸入都只送純文字，AI 收不到頁面資料。  
+**修復**：新增 `sendQuickWithContext(text)` 函式，自動附帶 `extractPageData(aiState.currentPid)` 的 JSON 資料。
+
+```javascript
+function sendQuickWithContext(text) {
+  const pid = aiState.currentPid;
+  if (pid && D.mo && D.mo.length > 0) {
+    const pageData = extractPageData(pid);
+    const dataStr = JSON.stringify(pageData, null, 2);
+    sendQuick(`${text}\n\n（當前頁面：P${pid} ${PAGE_NAMES[pid]}）\n\n數據如下：\n${dataStr}`);
+  } else {
+    sendQuick(text);
+  }
+}
+```
+
+快速建議區新增「📄 分析此頁面」按鈕（青色高亮），直接呼叫 `triggerPageAI(aiState.currentPid)`。
+
+---
+
+### 12.3 AI 供應商擴充
+
+| 新增供應商 | 端點 | 特點 |
+|-----------|------|------|
+| MiniMax | `https://api.minimaxi.com/v1` | 模型：M2.7 / M2.5 / M2.1（含高速版）|
+| OpenRouter | `https://openrouter.ai/api/v1` | 聚合多家模型 |
+| Ollama（本地）| `http://localhost:11434/v1` | 不需 API Key，本地部署 |
+
+---
+
+### 12.4 GitHub / Vercel 部署
+
+| 項目 | 內容 |
+|------|------|
+| GitHub Repo | https://github.com/jamic710808/financial-analysis-dashboard |
+| 分支 | `main` |
+| 入口檔案 | `index.html`（V3 副本，Vercel 靜態部署用）|
+| Vercel 設定 | Framework: Other（靜態 HTML）；無需額外設定 |
+
+**已上傳檔案**：
+- `index.html` — Vercel 入口
+- `Financial_Analysis_Dashboard_V3.html` — 原始命名版本
+- `financial_cors_proxy.py` — 本機 CORS 代理
+- `Financial_Analysis_Dashboard_V3_使用說明書.md`
+- `Financial_Analysis_Dashboard_V3_紀錄.md`
+
+---
+
+### 12.5 檔案規模（V3.2）
+
+| 版本 | 行數 | 主要變更 |
+|------|------|---------|
+| V3.0（2026-03-19） | 2,396 行 | 初始版本 |
+| V3.1（2026-04-10） | 3,114 行 | AI 模組整合 |
+| V3.2（2026-04-26） | ~5,400 行 | Bug 修復 × 6、新功能 × 4、部署 |
+
+---
+
+*V3.2 更新時間：2026年4月26日 | 協作工具：Claude AI (Cowork Mode)*
