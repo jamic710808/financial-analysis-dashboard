@@ -148,7 +148,15 @@ table{{border-collapse:collapse;width:100%}}td{{padding:7px 14px;border-bottom:1
         for k, v in fwd_headers.items():
             req.add_unredirected_header(k, v)
         try:
-            with urllib.request.urlopen(req, context=ctx, timeout=120) as r:
+            # timeout=300 作為保底；連線建立後嘗試取消讀取逾時以支援長串流
+            with urllib.request.urlopen(req, context=ctx, timeout=300) as r:
+                try:
+                    sock = (getattr(getattr(getattr(r, 'fp', None), 'raw', None), '_sock', None)
+                            or getattr(getattr(r, 'fp', None), '_sock', None))
+                    if sock:
+                        sock.settimeout(None)
+                except Exception:
+                    pass
                 self.send_response(r.status)
                 self._cors()
                 for k, v in r.headers.items():

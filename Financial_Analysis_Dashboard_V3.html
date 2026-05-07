@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <style>
     /* ============================================================
    CSS VARIABLES — DARK THEME (default)
@@ -1444,6 +1445,18 @@
       padding: 2px 14px;
       flex-shrink: 0
     }
+
+    /* Screenshot checkbox row */
+    .ai-shot-row { display:flex; gap:6px; align-items:center; padding:4px 14px 6px; font-size:10.5px; color:var(--muted); flex-shrink:0; }
+    .ai-shot-row label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+
+    /* Context usage bar */
+    .ai-ctx-usage { display:flex; align-items:center; justify-content:space-between; padding:4px 14px; font-size:10.5px; color:var(--muted); border-top:1px solid var(--bdr); flex-shrink:0; }
+    .ai-ctx-count { font-variant-numeric:tabular-nums; }
+    .ai-ctx-count.warn { color:var(--am); }
+    .ai-ctx-count.full { color:var(--ro); }
+    .ai-clear-btn { background:none; border:1px solid rgba(251,113,133,.35); color:#fb7185; border-radius:6px; padding:2px 8px; font-size:10.5px; cursor:pointer; transition:all .2s; }
+    .ai-clear-btn:hover { background:rgba(251,113,133,.15); }
 
     /* Input area */
     .ai-input-area {
@@ -4431,56 +4444,64 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         baseUrl: 'https://api.openai.com/v1',
         models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1-mini', 'o3-mini'],
         defaultModel: 'gpt-4o',
-        apiFormat: 'openai'
+        apiFormat: 'openai',
+        visionModels: ['gpt-4o', 'gpt-4-turbo']
       },
       anthropic: {
         name: 'Anthropic',
         baseUrl: 'https://api.anthropic.com/v1',
         models: ['claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
         defaultModel: 'claude-sonnet-4-6',
-        apiFormat: 'anthropic'
+        apiFormat: 'anthropic',
+        visionModels: ['claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001']
       },
       deepseek: {
         name: 'DeepSeek',
         baseUrl: 'https://api.deepseek.com/v1',
         models: ['deepseek-chat', 'deepseek-reasoner'],
         defaultModel: 'deepseek-chat',
-        apiFormat: 'openai'
+        apiFormat: 'openai',
+        visionModels: []
       },
       minimax: {
         name: 'MiniMax',
         baseUrl: 'https://api.minimaxi.com/v1',
         models: ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.1', 'MiniMax-M2.1-highspeed'],
         defaultModel: 'MiniMax-M2.7',
-        apiFormat: 'openai'
+        apiFormat: 'openai',
+        visionModels: []
       },
       siliconflow: {
         name: '硅基流動',
         baseUrl: 'https://api.siliconflow.cn/v1',
         models: ['Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V3', 'THUDM/glm-4-9b-chat', 'Pro/Qwen/Qwen2.5-7B-Instruct', 'Qwen/Qwen2.5-7B-Instruct'],
         defaultModel: 'Qwen/Qwen2.5-72B-Instruct',
-        apiFormat: 'openai'
+        apiFormat: 'openai',
+        visionModels: []
       },
       openrouter: {
         name: 'OpenRouter',
         baseUrl: 'https://openrouter.ai/api/v1',
         models: ['anthropic/claude-sonnet-4-6', 'openai/gpt-4o', 'deepseek/deepseek-chat', 'google/gemini-2.5-flash', 'meta-llama/llama-3.3-70b-instruct'],
         defaultModel: 'deepseek/deepseek-chat',
-        apiFormat: 'openai'
+        apiFormat: 'openai',
+        visionModels: ['anthropic/claude-sonnet-4-6', 'openai/gpt-4o', 'google/gemini-2.5-flash']
       },
       ollama: {
         name: 'Ollama（本地）',
         baseUrl: 'http://localhost:11434/v1',
         models: [],
         defaultModel: '',
-        apiFormat: 'openai'
+        apiFormat: 'openai',
+        visionModels: []
       },
       custom: {
         name: '自訂端點',
         baseUrl: '',
         models: [],
         defaultModel: '',
-        apiFormat: 'openai'
+        apiFormat: 'openai',
+        visionModels: []
       }
     };
 
@@ -4499,8 +4520,8 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       isStreaming: false,
       currentPid: 1,
       abortController: null,
-      proxyEnabled: false,
-      proxyPort: 8765
+      corsProxyMode: 'off',   // 'off' | 'local' | 'custom'
+      corsProxyUrl: ''
     };
 
     const AI_SYSTEM_PROMPT = `你是一位資深財務分析顧問，專精於財務報表解讀、財務比率分析、企業價值評估與風險管理。
@@ -4711,11 +4732,21 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       return div;
     }
 
+    function updateCtxCount() {
+      const el = document.getElementById('ai-ctx-count');
+      if (!el) return;
+      const n = aiState.chatHistory.length;
+      const max = 14;
+      el.textContent = `${n} / ${max} 則`;
+      el.className = 'ai-ctx-count' + (n >= max ? ' full' : n >= max * 0.7 ? ' warn' : '');
+    }
+
     function clearAIChat() {
       const box = document.getElementById('ai-messages');
       if (box) box.innerHTML = '';
       aiState.chatHistory = [];
       saveAIChatCache();
+      updateCtxCount();
       appendAIMessage('system', '對話已清除。請輸入問題或點擊頁面的「AI 分析」按鈕開始分析。');
     }
 
@@ -4744,13 +4775,15 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         temperature: parseFloat(document.getElementById('ai-temp').value) || 0.3,
         maxTokens: parseInt(document.getElementById('ai-max-tokens').value) || 4096,
         useStream: document.getElementById('ai-use-stream')?.checked !== false,
-        proxyEnabled: (document.getElementById('ai-cors-proxy')?.value || '0') !== '0'
+        corsProxyMode: document.getElementById('ai-cors-proxy')?.value || 'off',
+        corsProxyUrl: document.getElementById('ai-proxy-url')?.value.trim() || ''
       };
       localStorage.setItem(AI_STORAGE_KEY, JSON.stringify(payload));
       Object.assign(aiState, {
         provider: p, model,
         temperature: payload.temperature, maxTokens: payload.maxTokens,
-        useStream: payload.useStream, proxyEnabled: payload.proxyEnabled
+        useStream: payload.useStream,
+        corsProxyMode: payload.corsProxyMode, corsProxyUrl: payload.corsProxyUrl
       });
       appendAIMessage('system', '✅ 設定已儲存');
       toggleConfigSection(true);   // 儲存後自動折疊
@@ -4764,7 +4797,10 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         if (s.temperature !== undefined) aiState.temperature = s.temperature;
         if (s.maxTokens !== undefined) aiState.maxTokens = s.maxTokens;
         if (s.useStream !== undefined) aiState.useStream = s.useStream;
-        if (s.proxyEnabled !== undefined) aiState.proxyEnabled = s.proxyEnabled;
+        // 向後相容：舊版 boolean proxyEnabled → 新版 string corsProxyMode
+        if (s.corsProxyMode) aiState.corsProxyMode = s.corsProxyMode;
+        else if (s.proxyEnabled === true) aiState.corsProxyMode = 'local';
+        if (s.corsProxyUrl) aiState.corsProxyUrl = s.corsProxyUrl;
 
         if (s.provider) {
           const provSel = document.getElementById('ai-provider-select');
@@ -4788,7 +4824,13 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         const streamEl = document.getElementById('ai-use-stream');
         if (streamEl && s.useStream !== undefined) streamEl.checked = s.useStream;
         const proxyEl = document.getElementById('ai-cors-proxy');
-        if (proxyEl && s.proxyEnabled !== undefined) proxyEl.value = s.proxyEnabled ? '1' : '0';
+        if (proxyEl) {
+          // 向後相容舊 boolean
+          proxyEl.value = s.corsProxyMode || (s.proxyEnabled ? 'local' : 'off');
+        }
+        const proxyUrlEl = document.getElementById('ai-proxy-url');
+        if (proxyUrlEl && s.corsProxyUrl) proxyUrlEl.value = s.corsProxyUrl;
+        if (typeof onCorsProxyChange === 'function') onCorsProxyChange();
 
         const p = s.provider || aiState.provider;
         document.getElementById('ai-api-key').value = s.keys?.[p] ? atob(s.keys[p]) : '';
@@ -4802,8 +4844,15 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       localStorage.removeItem(AI_CACHE_KEY);
       aiState.keys = {};
       aiState.customBaseUrls = {};
+      aiState.corsProxyMode = 'off';
+      aiState.corsProxyUrl = '';
       const keyEl = document.getElementById('ai-api-key');
       if (keyEl) keyEl.value = '';
+      const proxyEl = document.getElementById('ai-cors-proxy');
+      if (proxyEl) proxyEl.value = 'off';
+      const proxyUrlEl = document.getElementById('ai-proxy-url');
+      if (proxyUrlEl) proxyUrlEl.value = '';
+      onCorsProxyChange();
       appendAIMessage('system', '✅ 已清除所有儲存的設定與 API Key');
     }
 
@@ -4819,6 +4868,7 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         if (!hist.length) { appendAIMessage('system', '👋 歡迎使用 AI 財務分析助理！請點擊任一頁面的「AI 分析」按鈕，或直接輸入問題開始分析。'); return; }
         hist.forEach(m => appendAIMessage(m.role === 'user' ? 'user' : 'assistant', m.content));
         aiState.chatHistory = hist;
+        updateCtxCount();
       } catch (e) { appendAIMessage('system', '👋 歡迎使用 AI 財務分析助理！'); }
     }
 
@@ -4915,6 +4965,42 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       if (arrow) arrow.textContent = hidden ? '▾' : '▸';
     }
 
+    // ── CORS Proxy ───────────────────────────────────────────────
+    function wrapWithProxy(originalUrl) {
+      if (aiState.corsProxyMode === 'local') {
+        return `http://localhost:8080/proxy?url=${encodeURIComponent(originalUrl)}`;
+      }
+      if (aiState.corsProxyMode === 'custom' && aiState.corsProxyUrl) {
+        const base = aiState.corsProxyUrl.replace(/\/$/, '');
+        return `${base}?url=${encodeURIComponent(originalUrl)}`;
+      }
+      return originalUrl;
+    }
+    function onCorsProxyChange() {
+      const sel = document.getElementById('ai-cors-proxy');
+      const row = document.getElementById('ai-proxy-url-row');
+      if (!sel || !row) return;
+      row.style.display = sel.value === 'custom' ? 'flex' : 'none';
+    }
+
+    // ── Screenshot ───────────────────────────────────────────────
+    async function captureCurrentTab() {
+      if (typeof html2canvas === 'undefined') {
+        appendAIMessage('system', '⚠️ html2canvas 載入失敗，無法截圖');
+        return null;
+      }
+      const pid = aiState.currentPid;
+      const sec = document.getElementById('p' + pid);
+      if (!sec) return null;
+      try {
+        const canvas = await html2canvas(sec, { scale: 0.8, useCORS: true, logging: false });
+        return canvas.toDataURL('image/png');
+      } catch (e) {
+        appendAIMessage('system', '截圖失敗：' + e.message);
+        return null;
+      }
+    }
+
     // ── Token estimation ─────────────────────────────────────────
     function estimateTokens(text) {
       const cjk = (text.match(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g) || []).length;
@@ -5003,12 +5089,23 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       document.getElementById('ai-send-btn').style.display = 'none';
       document.getElementById('ai-stop-btn').style.display = '';
 
+      // 截圖（可選）
+      let imgB64 = null;
+      if (document.getElementById('ai-attach-shot')?.checked) {
+        const prov = AI_PROVIDERS[p];
+        if (!prov || !prov.visionModels || prov.visionModels.length === 0 || !prov.visionModels.includes(aiState.model)) {
+          appendAIMessage('system', '⚠️ 當前模型不支援 Vision，已略過截圖');
+        } else {
+          imgB64 = await captureCurrentTab();
+        }
+      }
+
       try {
         const messages = [
           { role: 'system', content: AI_SYSTEM_PROMPT },
           ...aiState.chatHistory
         ];
-        await callAI(messages);
+        await callAI(messages, imgB64);
       } catch (e) {
         if (e.name !== 'AbortError') {
           appendAIMessage('system', `❌ 錯誤：${e.message}`);
@@ -5021,6 +5118,7 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         document.getElementById('ai-stop-btn').style.display = 'none';
         if (!aiState.abortController) setAIStatus('ready');
         saveAIChatCache();
+        updateCtxCount();
       }
     }
 
@@ -5031,7 +5129,7 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
     }
 
     // ── Core AI call ──────────────────────────────────────────────
-    async function callAI(messages) {
+    async function callAI(messages, imageBase64 = null) {
       const p = aiState.provider;
       const cfg = {
         key: aiState.keys[p] ? atob(aiState.keys[p]) : '',
@@ -5045,13 +5143,13 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
 
       try {
         if (p === 'anthropic' || (p === 'custom' && aiState.apiFormat === 'anthropic')) {
-          await _callAnthropic(messages, cfg, msgEl);
+          await _callAnthropic(messages, cfg, msgEl, imageBase64);
         } else {
           const useCustomUrl = p === 'custom' || p === 'openrouter' || p === 'ollama';
           const baseUrl = useCustomUrl
             ? (aiState.customBaseUrls[p] || AI_PROVIDERS[p]?.baseUrl || '')
             : AI_PROVIDERS[p].baseUrl;
-          await _callOpenAI(messages, cfg, baseUrl, msgEl);
+          await _callOpenAI(messages, cfg, baseUrl, msgEl, imageBase64);
         }
       } catch (err) {
         console.error('AI Call Error:', err);
@@ -5061,15 +5159,23 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       }
     }
 
-    async function _callOpenAI(messages, cfg, baseUrl, msgEl) {
-      let fetchUrl = `${baseUrl}/chat/completions`;
-      if (aiState.proxyEnabled) {
-        fetchUrl = `http://localhost:8080/proxy?url=${encodeURIComponent(fetchUrl)}`;
+    async function _callOpenAI(messages, cfg, baseUrl, msgEl, imageBase64 = null) {
+      let fetchUrl = wrapWithProxy(`${baseUrl}/chat/completions`);
+
+      // 若附加截圖，將最後一條 user 訊息改為 multimodal content
+      let msgs = messages;
+      if (imageBase64) {
+        msgs = messages.map((m, i) => {
+          if (i === messages.length - 1 && m.role === 'user') {
+            return { role: 'user', content: [{ type: 'text', text: m.content }, { type: 'image_url', image_url: { url: imageBase64 } }] };
+          }
+          return m;
+        });
       }
 
       const bodyObj = {
         model: cfg.model,
-        messages: messages,
+        messages: msgs,
         temperature: cfg.temp,
         max_tokens: cfg.maxTok,
         stream: cfg.stream
@@ -5138,16 +5244,21 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       }
     }
 
-    async function _callAnthropic(messages, cfg, msgEl) {
+    async function _callAnthropic(messages, cfg, msgEl, imageBase64 = null) {
       const sysMsg = messages.find(m => m.role === 'system')?.content || '';
-      const userMsgs = messages.filter(m => m.role !== 'system');
+      let userMsgs = messages.filter(m => m.role !== 'system').map(m => ({ role: m.role, content: m.content }));
       const anthropicBase = aiState.provider === 'anthropic'
         ? AI_PROVIDERS.anthropic.baseUrl
         : (aiState.customBaseUrls[aiState.provider] || '');
-      let fetchUrl = `${anthropicBase}/v1/messages`;
+      let fetchUrl = wrapWithProxy(`${anthropicBase}/v1/messages`);
 
-      if (aiState.proxyEnabled) {
-        fetchUrl = `http://localhost:8080/proxy?url=${encodeURIComponent(fetchUrl)}`;
+      // 若附加截圖，將最後一條 user 訊息改為 multimodal content
+      if (imageBase64 && userMsgs.length) {
+        const last = userMsgs[userMsgs.length - 1];
+        last.content = [
+          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imageBase64.replace(/^data:image\/png;base64,/, '') } },
+          { type: 'text', text: last.content }
+        ];
       }
 
       const resp = await fetch(fetchUrl, {
@@ -5260,7 +5371,11 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         aiState.customBaseUrls[p] = e.target.value;
       });
       document.getElementById('ai-api-format')?.addEventListener('change', e => { aiState.apiFormat = e.target.value; });
-      document.getElementById('ai-cors-proxy')?.addEventListener('change', e => { aiState.proxyEnabled = (e.target.value === '1'); });
+      document.getElementById('ai-cors-proxy')?.addEventListener('change', e => {
+        aiState.corsProxyMode = e.target.value;
+        onCorsProxyChange();
+      });
+      document.getElementById('ai-proxy-url')?.addEventListener('input', e => { aiState.corsProxyUrl = e.target.value.trim(); });
 
       // Init model options
       updateModelOptions(aiState.provider);
@@ -5360,10 +5475,15 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         </div>
         <div class="ai-config-row">
           <label class="ai-label">CORS 代理</label>
-          <select id="ai-cors-proxy" class="ai-select">
-            <option value="0">關閉 (直連)</option>
-            <option value="1">本機代理 (localhost:8080)</option>
+          <select id="ai-cors-proxy" class="ai-select" onchange="onCorsProxyChange()">
+            <option value="off">關閉（直連）</option>
+            <option value="local">本機代理（:8080）</option>
+            <option value="custom">自訂代理 URL</option>
           </select>
+        </div>
+        <div class="ai-config-row" id="ai-proxy-url-row" style="display:none">
+          <label class="ai-label">代理 URL</label>
+          <input id="ai-proxy-url" class="ai-input" type="text" placeholder="https://your-app.vercel.app/api/proxy" />
         </div>
         <div class="ai-config-row" id="ai-api-format-row" style="display:none">
           <label class="ai-label">API 格式</label>
@@ -5400,13 +5520,23 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
     <!-- Messages -->
     <div id="ai-messages" class="ai-messages"></div>
 
+    <!-- Screenshot Toggle -->
+    <div class="ai-shot-row">
+      <label><input type="checkbox" id="ai-attach-shot"> 📸 附加當前頁面截圖（需 Vision 模型）</label>
+    </div>
+
+    <!-- Context Usage Bar -->
+    <div class="ai-ctx-usage">
+      <span>💬 對話紀錄：<span id="ai-ctx-count" class="ai-ctx-count">0 / 14 則</span></span>
+      <button class="ai-clear-btn" onclick="clearAIChat()">🗑 清除對話</button>
+    </div>
+
     <!-- Input Area -->
     <div class="ai-input-area">
       <textarea id="ai-input" class="ai-textarea" rows="3" placeholder="輸入問題…（Shift+Enter 換行，Enter 送出）"></textarea>
       <div class="ai-input-btns">
         <button id="ai-send-btn" class="ai-send-btn" onclick="sendAIMessage()">▶ 送出</button>
         <button id="ai-stop-btn" class="ai-stop-btn" onclick="stopAI()" style="display:none">■ 停止</button>
-        <button class="ai-btn-sm" onclick="clearAIChat()" title="清除對話">🗑</button>
         <button class="ai-btn-sm" onclick="exportAIChat()" title="匯出對話">📥</button>
       </div>
     </div>
