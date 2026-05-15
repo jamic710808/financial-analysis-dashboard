@@ -4482,7 +4482,7 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       openrouter: {
         name: 'OpenRouter',
         baseUrl: 'https://openrouter.ai/api/v1',
-        models: ['anthropic/claude-sonnet-4-6', 'openai/gpt-4o', 'deepseek/deepseek-chat', 'google/gemini-2.5-flash', 'meta-llama/llama-3.3-70b-instruct'],
+        models: ['anthropic/claude-sonnet-4-6', 'openai/gpt-4o', 'deepseek/deepseek-chat', 'google/gemini-2.5-flash', 'meta-llama/llama-3.3-70b-instruct', '__custom__'],
         defaultModel: 'deepseek/deepseek-chat',
         apiFormat: 'openai',
         visionModels: ['anthropic/claude-sonnet-4-6', 'openai/gpt-4o', 'google/gemini-2.5-flash']
@@ -4520,7 +4520,7 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       isStreaming: false,
       currentPid: 1,
       abortController: null,
-      corsProxyMode: 'off',   // 'off' | 'local' | 'custom'
+      corsProxyMode: 'vercel',   // 'off' | 'local' | 'vercel' | 'custom'
       corsProxyUrl: ''
     };
 
@@ -4826,7 +4826,7 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         const proxyEl = document.getElementById('ai-cors-proxy');
         if (proxyEl) {
           // 向後相容舊 boolean
-          proxyEl.value = s.corsProxyMode || (s.proxyEnabled ? 'local' : 'off');
+          proxyEl.value = s.corsProxyMode || (s.proxyEnabled ? 'local' : 'vercel');
         }
         const proxyUrlEl = document.getElementById('ai-proxy-url');
         if (proxyUrlEl && s.corsProxyUrl) proxyUrlEl.value = s.corsProxyUrl;
@@ -4844,12 +4844,12 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       localStorage.removeItem(AI_CACHE_KEY);
       aiState.keys = {};
       aiState.customBaseUrls = {};
-      aiState.corsProxyMode = 'off';
+      aiState.corsProxyMode = 'vercel';
       aiState.corsProxyUrl = '';
       const keyEl = document.getElementById('ai-api-key');
       if (keyEl) keyEl.value = '';
       const proxyEl = document.getElementById('ai-cors-proxy');
-      if (proxyEl) proxyEl.value = 'off';
+      if (proxyEl) proxyEl.value = 'vercel';
       const proxyUrlEl = document.getElementById('ai-proxy-url');
       if (proxyUrlEl) proxyUrlEl.value = '';
       onCorsProxyChange();
@@ -4919,16 +4919,22 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       sel.innerHTML = '';
       const prov = AI_PROVIDERS[provider];
       if (!prov) return;
+      const hasCustomOpt = prov.models.includes('__custom__');
       prov.models.forEach(m => {
         const opt = document.createElement('option');
-        opt.value = m; opt.textContent = m;
-        if (m === prov.defaultModel) opt.selected = true;
+        if (m === '__custom__') {
+          opt.value = '__custom__'; opt.textContent = '✏️ 自訂模型…';
+        } else {
+          opt.value = m; opt.textContent = m;
+          if (m === prov.defaultModel) opt.selected = true;
+        }
         sel.appendChild(opt);
       });
+      // 清除舊的自訂 input（切換供應商時重置）
+      const oldInp = document.getElementById('ai-model-custom-input');
+      if (oldInp) oldInp.remove();
       if (provider === 'custom' || provider === 'ollama') {
         sel.style.display = 'none';
-        const existing = document.getElementById('ai-model-custom-input');
-        if (existing) existing.remove();
         const inp = document.createElement('input');
         inp.id = 'ai-model-custom-input'; inp.className = 'ai-input';
         inp.placeholder = provider === 'ollama' ? 'llama3.2、qwen2.5 等…' : '輸入模型名稱…';
@@ -4937,8 +4943,29 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         sel.parentNode.insertBefore(inp, sel.nextSibling);
       } else {
         sel.style.display = '';
-        const old = document.getElementById('ai-model-custom-input');
-        if (old) old.remove();
+        // 當供應商有 __custom__ 選項時，監聽下拉切換
+        if (hasCustomOpt) {
+          sel.onchange = function () {
+            const existInp = document.getElementById('ai-model-custom-input');
+            if (sel.value === '__custom__') {
+              if (!existInp) {
+                const inp = document.createElement('input');
+                inp.id = 'ai-model-custom-input'; inp.className = 'ai-input';
+                inp.placeholder = 'e.g. qwen/qwen3-235b-a22b:free';
+                inp.style.cssText = 'flex:1;margin-top:4px;width:100%';
+                inp.addEventListener('input', () => { aiState.model = inp.value.trim(); });
+                sel.parentNode.appendChild(inp);
+                inp.focus();
+              }
+              aiState.model = document.getElementById('ai-model-custom-input')?.value.trim() || '';
+            } else {
+              if (existInp) existInp.remove();
+              aiState.model = sel.value;
+            }
+          };
+        } else {
+          sel.onchange = function () { aiState.model = sel.value; };
+        }
       }
       aiState.model = sel.value || prov.defaultModel;
     }
@@ -4969,6 +4996,9 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
     function wrapWithProxy(originalUrl) {
       if (aiState.corsProxyMode === 'local') {
         return `http://localhost:8080/proxy?url=${encodeURIComponent(originalUrl)}`;
+      }
+      if (aiState.corsProxyMode === 'vercel') {
+        return `/api/proxy?url=${encodeURIComponent(originalUrl)}`;
       }
       if (aiState.corsProxyMode === 'custom' && aiState.corsProxyUrl) {
         const base = aiState.corsProxyUrl.replace(/\/$/, '');
@@ -5233,6 +5263,7 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         msgEl.innerHTML = renderMarkdownAI(finalMd);
         msgEl.classList.remove('streaming');
         aiState.chatHistory.push({ role: 'assistant', content: finalMd });
+        renderDynamicReplies(aiState.currentPid, finalMd);
       } else {
         const json = await resp.json();
         const choice = json.choices?.[0]?.message;
@@ -5241,6 +5272,7 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         const finalMd = th ? `<thought>${th}</thought>\n${ct}` : ct;
         msgEl.innerHTML = renderMarkdownAI(finalMd);
         aiState.chatHistory.push({ role: 'assistant', content: finalMd });
+        renderDynamicReplies(aiState.currentPid, finalMd);
       }
     }
 
@@ -5306,11 +5338,13 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         }
         msgEl.classList.remove('streaming');
         aiState.chatHistory.push({ role: 'assistant', content: full });
+        renderDynamicReplies(aiState.currentPid, full);
       } else {
         const data = await resp.json();
         const text = data.content?.[0]?.text || '';
         msgEl.innerHTML = renderMarkdownAI(text);
         aiState.chatHistory.push({ role: 'assistant', content: text });
+        renderDynamicReplies(aiState.currentPid, text);
       }
     }
 
@@ -5352,6 +5386,80 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
       t = '<p>' + t + '</p>';
       thoughts.forEach((tr, i) => { t = t.replace(`%%THOUGHT_${i}%%`, tr); });
       return t;
+    }
+
+    // ── Dynamic Quick Reply after AI response ────────────────────
+    function generateDynamicReplies(pid, responseText) {
+      const txt = responseText || '';
+      const suggestions = [];
+
+      // 關鍵詞觸發（通用）
+      if (/(風險|警訊|預警|注意|異常)/.test(txt))
+        suggestions.push({ label: '🔍 量化風險指標', text: '請將上述風險轉為可量測的 KPI 觸發條件與閾值，方便設立預警機制' });
+      if (/(建議|改善|優化|提升|改進)/.test(txt))
+        suggestions.push({ label: '📋 90天行動計劃', text: '請將改善建議轉化為具體 90 天行動計劃，每項設定可追蹤的 KPI 目標' });
+      if (/(毛利|利潤|獲利|EBITDA|利潤率)/.test(txt))
+        suggestions.push({ label: '📊 獲利驅動深挖', text: '請分析影響獲利能力最關鍵的驅動因子及各自的提升空間' });
+      if (/(現金|CFO|流動性|FCF|自由現金)/.test(txt))
+        suggestions.push({ label: '💧 現金轉換效率', text: '請深入分析現金轉換效率及未來 2 季的資金需求預測' });
+      if (/(ROE|杜邦|資產週轉|財務槓桿)/.test(txt))
+        suggestions.push({ label: '🔬 ROE 提升路徑', text: '對比業界標準，逐一列出 ROE 三個驅動因子最具改善空間的方向與量化目標' });
+      if (/(Z-Score|破產|財務健康|危險區)/.test(txt))
+        suggestions.push({ label: '🏥 壓力測試', text: '請模擬收入下降 20% 情境下 Z-Score 的變化，並給出應對緩衝措施' });
+
+      // 頁面專屬追問
+      const pageReplies = {
+        1:  [{ label: '📈 下季預測', text: '根據當前趨勢，預測下一季的營收和淨利範圍，說明假設條件' }],
+        2:  [{ label: '🏦 資本結構優化', text: '根據目前資本結構，建議最優化的融資策略（股權 vs 債務比例）' }],
+        3:  [{ label: '📉 費用優先序', text: '哪個費用項目最具壓縮空間？請給出具體優化方向與量化效益' }],
+        4:  [{ label: '💰 FCF 改善方案', text: '列出未來 4 季 FCF 改善的 3 個具體行動方案，含預估效益金額' }],
+        5:  [{ label: '🏆 同業利潤率', text: '上述利潤率與同產業標準相比處於什麼位置？差距源自哪裡？' }],
+        6:  [{ label: '⏱️ DSO 降 5 天模擬', text: '應收帳款天數降低 5 天，對現金流和淨營運資金的具體影響金額是多少？' }],
+        7:  [{ label: '🎯 ROE 目標設定', text: '要將 ROE 提升至 15%，各個杜邦因子需要達到什麼具體水準？' }],
+        8:  [{ label: '📊 Z-Score 壓力測試', text: '收入下降 20% 情境下，Z-Score 將跌至哪個區間？需要哪些緩衝措施？' }],
+        9:  [{ label: '🔄 CCC 改善模擬', text: '請模擬 DSO 降 5 天＋DPO 延長 10 天後的 CCC 改善效果與影響金額' }],
+        10: [{ label: '🎭 三情境矩陣', text: '請呈現悲觀/基準/樂觀三情境下的財務影響矩陣（含機率假設）' }],
+        11: [{ label: '🔗 三表差異定位', text: '如果三表勾稽存在差異，最可能原因是什麼？如何快速定位修正？' }],
+        12: [{ label: '📅 季節性調整', text: '請識別數據中的季節性模式，估算季調後的真實成長率' }],
+        13: [{ label: '🔧 品質問題修復', text: '針對識別出的品質問題，請按影響程度排序，給出修復優先序與方法' }],
+        14: [{ label: '📊 最佳/最差月份', text: '找出 12 個月中財務表現最好和最差的月份，分析其共同特徵' }],
+        15: [{ label: '⚡ Calculation Group', text: '如何用 Calculation Groups 統一管理 YTD/SPLY/MoM 所有時間計算，避免重複公式？' }],
+      };
+
+      const pageSuggs = pageReplies[pid] || [];
+      const combined = [...suggestions, ...pageSuggs];
+      const seen = new Set();
+      const result = [];
+      for (const s of combined) {
+        if (!seen.has(s.label)) { seen.add(s.label); result.push(s); }
+        if (result.length >= 4) break;
+      }
+      return result;
+    }
+
+    function renderDynamicReplies(pid, responseText) {
+      const suggestions = generateDynamicReplies(pid, responseText);
+      if (!suggestions.length) return;
+      const box = document.getElementById('ai-messages');
+      if (!box) return;
+      box.querySelectorAll('.ai-dynamic-replies').forEach(el => el.remove());
+      const row = document.createElement('div');
+      row.className = 'ai-dynamic-replies';
+      row.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;padding:6px 2px 6px;border-top:1px solid rgba(255,255,255,.06);margin-top:2px;';
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'width:100%;font-size:9.5px;color:var(--dim);margin-bottom:3px;letter-spacing:.4px;';
+      lbl.textContent = '💡 延伸追問';
+      row.appendChild(lbl);
+      suggestions.forEach(s => {
+        const btn = document.createElement('button');
+        btn.className = 'ai-quick-btn';
+        btn.textContent = s.label;
+        btn.title = s.text;
+        btn.onclick = () => { row.remove(); sendQuickWithContext(s.text); };
+        row.appendChild(btn);
+      });
+      box.appendChild(row);
+      box.scrollTop = box.scrollHeight;
     }
 
     // ── Init AI panel events ─────────────────────────────────────
@@ -5476,6 +5584,7 @@ FORMAT(LASTDATE('D_日期表'[Date]), "YYYY年MM月")`},
         <div class="ai-config-row">
           <label class="ai-label">CORS 代理</label>
           <select id="ai-cors-proxy" class="ai-select" onchange="onCorsProxyChange()">
+            <option value="vercel" selected>本站 /api/proxy (Vercel)</option>
             <option value="off">關閉（直連）</option>
             <option value="local">本機代理（:8080）</option>
             <option value="custom">自訂代理 URL</option>
